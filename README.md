@@ -759,15 +759,3 @@ Stories below are copied programmatically from `results_final.csv` (normal run) 
 |---|---|
 | Baseline | In the heart of a bustling town, a man sat on a bench, his eyes fixed on a distant dog. The dog, a golden retriever, wagged its tail in greeting. The man's face lit up as he watched the dog play with a toy, its tail swishing back and forth. The dog, in turn, wagged its tail back and forth, its eyes sparkling with joy. The man smiled, feeling grateful for the simple bond between them. |
 | Improved | In a dimly lit room, a woman stood before a small red building with a green door and red lights. She held a figure in her arms, which was a man. The scene was set against a dark background, with shadows playing on the walls and the figure's face obscured by a hood. |
-
-
----
-
-<div align="center">
-
-```text
-Built for the Image → Story Challenge — Modules 7 & 10
-Fully local • Offline • Reproducible
-```
-
-</div>
