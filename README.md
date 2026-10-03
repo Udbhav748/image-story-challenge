@@ -331,10 +331,10 @@ The `selftest_image.jpg` is used by `python metric.py` to verify the evaluation 
 
 ### Challenge Images (8 frames from *Spirited Away*)
 
-The 8 evaluation images are not included in this repository due to copyright. They are frames from the film *Spirited Away* (Studio Ghibli). To reproduce results, place them in a local folder (e.g., `D:\Downloads\images\`) and run:
+All 8 evaluation images are included in the `images/` folder. Run the full comparison:
 
 ```powershell
-python main.py "D:\Downloads\images" --both --output results.csv
+python main.py images/ --both --output results.csv
 ```
 
 | Image | Description | Baseline Grounding | Improved Grounding |
@@ -348,19 +348,25 @@ python main.py "D:\Downloads\images" --both --output results.csv
 | `thumb-chihiro007.png` | Chinese restaurant entrance | 0.787 | 0.907 |
 | `thumb-chihiro008.png` | Night town, video game style | 0.746 | 0.975 |
 
-<!-- 
-To add visual examples to this README:
-1. Copy the 8 challenge images to an `images/` folder in the repo
-2. Uncomment and update the image references below
-3. Or host images externally and reference via URL
--->
-
-<!--
 <p align="center">
-  <img src="images/chihiro003.jpg" alt="chihiro003" width="300"/>
-  <img src="images/thumb-chihiro001.png" alt="thumb-chihiro001" width="300"/>
+  <img src="images/chihiro003.jpg" alt="chihiro003.jpg - European city street scene" width="300"/>
+  <img src="images/thumb-chihiro001.png" alt="thumb-chihiro001.png - Child in car with flowers" width="300"/>
 </p>
--->
+
+<p align="center">
+  <img src="images/thumb-chihiro002.png" alt="thumb-chihiro002.png - Girl and monster statue" width="300"/>
+  <img src="images/thumb-chihiro004.png" alt="thumb-chihiro004.png - Family meal" width="300"/>
+</p>
+
+<p align="center">
+  <img src="images/thumb-chihiro005.png" alt="thumb-chihiro005.png - Boy on balcony" width="300"/>
+  <img src="images/thumb-chihiro006.png" alt="thumb-chihiro006.png - Pig in kitchen" width="300"/>
+</p>
+
+<p align="center">
+  <img src="images/thumb-chihiro007.png" alt="thumb-chihiro007.png - Chinese restaurant" width="300"/>
+  <img src="images/thumb-chihiro008.png" alt="thumb-chihiro008.png - Night town" width="300"/>
+</p>
 
 ---
 
