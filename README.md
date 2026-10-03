@@ -21,6 +21,25 @@ IMAGE  →  VISUAL UNDERSTANDING  →  STRUCTURED CONTEXT  →  QWEN STORY GENER
 > with higher mean grounding and lower NLI contradiction, with regressions, a tied length-controlled pass rate and a much higher generation cost.
 > The result shows a direction on this sample, not a proven improvement. See [Results](#results) and [Limitations](#limitations).
 
+## Example Preview
+
+Two of the 8 images, chosen by a fixed rule: the largest grounding-score improvement and the largest regression in the normal run (`results_final.csv`). Stories are copied unchanged. All 8 are in the [full gallery](#visual-examples).
+
+<table>
+<tr>
+<th>Improved: <code>thumb-chihiro002.png</code></th>
+<th>Regressed: <code>thumb-chihiro004.png</code></th>
+</tr>
+<tr>
+<td align="center"><img src="images/thumb-chihiro002.png" alt="thumb-chihiro002.png" width="260"/><br/>Grounding 0.644 → <b>0.911</b> (+0.267)<br/>Words 47 → 65</td>
+<td align="center"><img src="images/thumb-chihiro004.png" alt="thumb-chihiro004.png" width="260"/><br/>Grounding 0.895 → 0.823 (-0.073)<br/>Words 30 → 59</td>
+</tr>
+<tr>
+<td valign="top"><b>Baseline:</b> A woman sits alone on a rocky outcropping, gazing out at the car that drives by. The sun sets over the horizon, casting long shadows across the landscape. She takes a deep breath, feeling the cool breeze on her face as she watches the world pass by.<br/><br/><b>Improved:</b> In the heart of the dense forest, a young girl stood beside a large green monster statue, her eyes sparkling with laughter as she gazed at the towering figure. She wore a simple green dress and a pair of sturdy boots, her face a mix of mischief and innocence. The car, its headlights casting long shadows, passed by, its occupants oblivious to the child&#x27;s presence.</td>
+<td valign="top"><b>Baseline:</b> A man and woman sit at a table, sipping on coffee and savoring their meal. The aroma of freshly baked bread fills the air as they chat about their day.<br/><br/><b>Improved:</b> In the bustling restaurant, the family sat at a table, their faces all focused on their meal. The man, with his golden fur and expressive eyes, was savoring his hot dog. The woman, with her long hair and a mischievous grin, was munching on a red fish. The child, with a curious look, watched them both with wide eyes.</td>
+</tr>
+</table>
+
 ## At a Glance
 
 | Item | Details |
