@@ -310,6 +310,60 @@ Style: playful.
 
 ---
 
+## Visual Examples
+
+### Self-Test Image (Metric Validation)
+
+The `selftest_image.jpg` is used by `python metric.py` to verify the evaluation pipeline with synthetic captions/stories.
+
+<p align="center">
+  <img src="selftest_image.jpg" alt="Self-test image: ginger cat in a blue bag" width="400"/>
+  <br>
+  <em>Self-test image: ginger cat in a blue bag</em>
+</p>
+
+**Caption used:** `a brown cat sitting inside a blue bag`
+
+| Story Type | Grounding | Pass |
+|------------|-----------|------|
+| Consistent (grounded) | 0.928 | ✅ |
+| Contradicting (hallucinated) | 0.158 | ❌ |
+
+### Challenge Images (8 frames from *Spirited Away*)
+
+The 8 evaluation images are not included in this repository due to copyright. They are frames from the film *Spirited Away* (Studio Ghibli). To reproduce results, place them in a local folder (e.g., `D:\Downloads\images\`) and run:
+
+```powershell
+python main.py "D:\Downloads\images" --both --output results.csv
+```
+
+| Image | Description | Baseline Grounding | Improved Grounding |
+|-------|-------------|-------------------|-------------------|
+| `chihiro003.jpg` | Street scene, European city | 0.740 | 0.805 |
+| `thumb-chihiro001.png` | Girl/boy in car with flowers | 0.856 | 0.817 |
+| `thumb-chihiro002.png` | Girl + monster statue in forest | 0.644 | 0.883 |
+| `thumb-chihiro004.png` | Family meal in restaurant | 0.895 | 0.834 |
+| `thumb-chihiro005.png` | Green-haired boy on balcony | 0.722 | 0.843 |
+| `thumb-chihiro006.png` | Pig in kitchen with food | 0.878 | 0.864 |
+| `thumb-chihiro007.png` | Chinese restaurant entrance | 0.787 | 0.907 |
+| `thumb-chihiro008.png` | Night town, video game style | 0.746 | 0.975 |
+
+<!-- 
+To add visual examples to this README:
+1. Copy the 8 challenge images to an `images/` folder in the repo
+2. Uncomment and update the image references below
+3. Or host images externally and reference via URL
+-->
+
+<!--
+<p align="center">
+  <img src="images/chihiro003.jpg" alt="chihiro003" width="300"/>
+  <img src="images/thumb-chihiro001.png" alt="thumb-chihiro001" width="300"/>
+</p>
+-->
+
+---
+
 ## Model Stack
 
 | Component | Model |
