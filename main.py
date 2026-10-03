@@ -11,7 +11,8 @@ from pathlib import Path
 
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
-os.environ.setdefault("HF_HOME", r"D:\AI-Models\huggingface")
+# Use HF_HOME from environment if set, otherwise let Hugging Face use its default cache
+# os.environ.setdefault("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
 
 import torch
 from PIL import Image
@@ -70,7 +71,7 @@ def run_improved(image_path, fix_length=False):
 
 
 def run_multi_image_story(image_paths, fix_length=False):
-    """Run multi-image story generation with continuity."""
+    """Run multi-image story generation with continuity evaluation."""
     try:
         descs = []
         total_see_s = 0
@@ -100,12 +101,24 @@ def run_multi_image_story(image_paths, fix_length=False):
         
         story_s = time.time() - t1
         
+        # Evaluate continuity for multi-image story
+        # Build context dicts for continuity evaluation
+        image_contexts = []
+        for d in descs:
+            image_contexts.append({
+                "characters": d.get("characters", []),
+                "objects": d.get("objects", []),
+                "region_descriptions": d.get("region_descriptions", []),
+            })
+        continuity = metric.continuity_score(image_contexts, story)
+        
         return {
             "images": [os.path.basename(p) for p in image_paths],
             "story": story,
             "word_count": len(story.split()),
             "see_s": round(total_see_s, 2),
             "story_s": round(story_s, 2),
+            "continuity": continuity,
             "vision_json": {d["image_id"]: {k: v for k, v in d.items() if k not in ["runtime_s", "model_load_s"]} for d in descs},
         }
     except Exception as e:
@@ -117,7 +130,7 @@ def run_comparison(image_paths, fix_length=False, output_csv="results.csv"):
     all_rows = []
     all_vision = {}
     
-    for p in image_paths:
+for p in image_paths:
         name = os.path.basename(p)
         print(f"\nProcessing {name}...")
         
@@ -125,11 +138,28 @@ def run_comparison(image_paths, fix_length=False, output_csv="results.csv"):
         a = run_baseline(p, fix_length)
         if "error" in a:
             print(f"  Baseline error: {a['error']}")
-            continue
+            # Record error row for baseline
+            all_rows.append({
+                "image": name, "variant": "A_baseline", "context": "", "story": "",
+                "see_s": 0, "story_s": 0, "word_count": 0, "length_valid": False,
+                "truncated": False, "clip_image_story_mean": 0, "clip_image_story_min": 0,
+                "clip_image_caption": 0, "nli_contra_mean": 1.0, "nli_contra_max": 1.0,
+                "attribute_conflict": "", "grounding_score": 0.0, "grounding_pass": False,
+                "runtime_s": 0, "repeated_sentences": 0, "repeated_bigrams": 0,
+                "repeated_trigrams": 0, "repetition_rate": 0.0, "distinct3": 1.0,
+                "entity_consistency": 1.0, "transition_markers": 0, "adjacent_similarity": 1.0,
+            })
+            # Still try improved
+            try:
+                desc = seeing.describe(p)
+                all_vision[name] = desc
+            except Exception as e:
+                print(f"  Improved error: {e}")
+                continue
+        else:
+            desc = seeing.describe(p)
+            all_vision[name] = desc
         
-        # Improved
-        desc = seeing.describe(p)
-        all_vision[name] = desc
         ctx = context_builder.build_single_image_context(desc)
         
         t = time.time()
@@ -157,7 +187,7 @@ def run_comparison(image_paths, fix_length=False, output_csv="results.csv"):
         print(f"\nWrote {output_csv} with {len(all_rows)} rows")
     
     # Write vision JSON
-    vision_out = output_csv.replace(".csv", "_vision.json")
+    vision_out = args.vision_json
     context_builder.save_vision_json(list(all_vision.values()), vision_out)
     print(f"Wrote {vision_out}")
     
@@ -171,7 +201,6 @@ def run_comparison(image_paths, fix_length=False, output_csv="results.csv"):
             print(f"  grounding_pass={sum(bool(x['grounding_pass']) for x in r)}/{n}")
             print(f"  length_valid={sum(bool(x['length_valid']) for x in r)}/{n}")
             print(f"  mean repetition_rate={sum(x['repetition_rate'] for x in r)/n:.4f}")
-            print(f"  mean entity_consistency={sum(x['entity_consistency'] for x in r)/n:.3f}")
             print(f"  mean see_s={sum(x['see_s'] for x in r)/n:.1f} mean story_s={sum(x['story_s'] for x in r)/n:.1f}")
     
     return all_rows, all_vision
@@ -208,6 +237,13 @@ def main():
             return
         print(f"\nMulti-image story ({result['word_count']} words):")
         print(result["story"])
+        # Print continuity metrics
+        if "continuity" in result:
+            cont = result["continuity"]
+            print(f"\nContinuity metrics:")
+            print(f"  entity_consistency: {cont.get('entity_consistency', 'N/A'):.4f}")
+            print(f"  transition_markers: {cont.get('transition_markers', 'N/A')}")
+            print(f"  adjacent_similarity: {cont.get('adjacent_similarity', 'N/A'):.4f}")
         # Save
         with open("combined_story.json", "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, ensure_ascii=False)

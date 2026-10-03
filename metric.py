@@ -11,7 +11,8 @@ import os, re, time, csv
 from contextlib import ContextDecorator
 from collections import Counter
 
-os.environ.setdefault("HF_HOME", r"D:\AI-Models\huggingface")
+# HF_HOME: use environment variable if set, otherwise let Hugging Face use its default cache
+# os.environ.setdefault("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 import torch

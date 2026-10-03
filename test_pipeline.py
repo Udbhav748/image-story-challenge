@@ -145,7 +145,9 @@ def test_context_builder_sequence():
 
 def test_json_schema_validation():
     """Test vision JSON output schema."""
-    desc = seeing.describe.__wrapped__(r"D:\Downloads\images\chihiro003.jpg") if hasattr(seeing.describe, '__wrapped__') else seeing.describe(r"D:\Downloads\images\chihiro003.jpg")
+    # Use repository-local test image instead of machine-specific path
+    test_img = os.path.join(os.path.dirname(__file__), "selftest_image.jpg")
+    desc = seeing.describe.__wrapped__(test_img) if hasattr(seeing.describe, '__wrapped__') else seeing.describe(test_img)
     required_keys = ["image_id", "scene", "description", "objects", "characters", "actions", "relationships", "ocr_text", "spatial_relations", "region_descriptions", "style_or_mood", "runtime_s", "model_load_s"]
     for k in required_keys:
         assert k in desc, f"Missing key: {k}"

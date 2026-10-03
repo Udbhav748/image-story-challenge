@@ -258,9 +258,9 @@ Evaluation is a first-class part of the pipeline. Every `(image, context, story)
 
 *Source: `results_new.csv` -- 8 images × 2 variants, run offline with `HF_HUB_OFFLINE=1`.*
 
-### Length-Equalised Mode (`--fix-length`)
+### Length-Controlled Mode (`--fix-length`)
 
-With `--fix-length`, both pipelines retry generation up to 3 times with stricter length prompts until the story falls in 80–120 words (or return the best attempt). This controls the length confound.
+With `--fix-length`, both pipelines retry generation up to 3 times with stricter length prompts until the story falls in 80–120 words (or return the best attempt). This controls the length confound by applying the same length-control mechanism to both pipelines. It does not force identical word counts.
 
 | Metric | Baseline (BLIP) | Improved (Florence-2) | Delta |
 |--------|-----------------|----------------------|-------|
@@ -274,9 +274,9 @@ With `--fix-length`, both pipelines retry generation up to 3 times with stricter
 | Mean Story Time | 27.0 s | 24.5 s | -2.5 s |
 | Mean Total Time | 29.4 s | 41.9 s | +12.5 s |
 
-*Source: `results_fixlen_new.csv` -- same 8 images, length-equalised, offline.*
+*Source: `results_fixlen_new.csv` -- same 8 images, length-controlled, offline.*
 
-**Key insight:** With length equalised, the grounding gain shrinks from +0.083 to +0.033, and baseline wins on grounding pass (5/8 vs 4/8) because both produce 6 valid-length stories but baseline scores higher on the ones that pass. The large normal-mode pass gain (+2 passes) was largely a length artifact. NLI contradiction is substantially reduced (−0.119) with the improved pipeline.
+**Key insight:** With length controlled, the grounding gain shrinks from +0.083 to +0.033, and baseline wins on grounding pass (5/8 vs 4/8) because both produce 6 valid-length stories but baseline scores higher on the ones that pass. The large normal-mode pass gain (+2 passes) was largely a length artifact. NLI contradiction is substantially reduced (−0.119) with the improved pipeline.
 
 ---
 
@@ -301,7 +301,7 @@ With `--fix-length`, both pipelines retry generation up to 3 times with stricter
 
 ## Key Finding
 
-> **Florence-2's structured visual extraction (detailed caption + OD + dense regions) raises grounding score by +0.083 normally and +0.033 when length is equalised, while substantially reducing NLI contradiction (−0.043 normal, −0.119 fixlen). In normal mode, grounding improved on 5/8 images and regressed on 3/8; in length-controlled mode, improved and baseline each win on 4/8 images, and baseline wins on grounding pass (5/8 vs 4/8) because both produce 6 valid-length stories. The single-sentence BLIP bottleneck is real and the richer visual representation helps on average, but Florence-2 introduces its own errors (false "dog", gender confusion) and the small Qwen model struggles to integrate longer contexts under length constraints.**
+> **Florence-2's structured visual extraction (detailed caption + OD + dense regions) raises grounding score by +0.083 normally and +0.033 when length is controlled, while substantially reducing NLI contradiction (−0.043 normal, −0.119 fixlen). In normal mode, grounding improved on 5/8 images and regressed on 3/8; in length-controlled mode, improved and baseline each win on 4/8 images, and baseline wins on grounding pass (5/8 vs 4/8) because both produce 6 valid-length stories. The single-sentence BLIP bottleneck is real and the richer visual representation helps on average, but Florence-2 introduces its own errors (false "dog", gender confusion) and the small Qwen model struggles to integrate longer contexts under length constraints.**
 
 **Runtime tradeoff:** Seeing cost increases ~4–7× (4.3 s → 18.1 s/image normal; 2.4 s → 17.4 s fixlen). Story generation remains similar in normal mode (~9 s); fixlen multiplies story time ~3× due to retries. Total pipeline ~2× slower normal, ~1.4× slower fixlen.
 

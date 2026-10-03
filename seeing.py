@@ -7,7 +7,8 @@ from PIL import Image
 
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
-os.environ.setdefault("HF_HOME", r"D:\AI-Models\huggingface")
+# HF_HOME: use environment variable if set, otherwise let Hugging Face use its default cache
+# os.environ.setdefault("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
 
 MODEL_ID = "florence-community/Florence-2-base"
 NUM_BEAMS = 1

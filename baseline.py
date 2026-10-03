@@ -3,7 +3,8 @@ Usage: python baseline.py img1.jpg [img2.jpg ...]   |   from baseline import cap
 """
 import os, sys, time, json
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
-os.environ.setdefault("HF_HOME", r"D:\AI-Models\huggingface")
+# HF_HOME: use environment variable if set, otherwise let Hugging Face use its default cache
+# os.environ.setdefault("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
 import torch
 from PIL import Image
 from transformers import BlipProcessor, BlipForConditionalGeneration, AutoTokenizer, AutoModelForCausalLM

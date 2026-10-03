@@ -3,7 +3,7 @@
 All numbers come from two runs of `python main.py images/ --both` on the 8 images in `images/` (frames from *Spirited Away*). Everything ran offline (`HF_HUB_OFFLINE=1`) on a CPU-only laptop (Python 3.13, torch 2.13, transformers 5.15). 
 
 Run 1 (normal): `python main.py images/ --both --output results_new.csv`
-Run 2 (length-equalised): `python main.py images/ --both --fix-length --output results_fixlen_new.csv`
+Run 2 (length-controlled): `python main.py images/ --both --fix-length --output results_fixlen_new.csv`
 
 ## Problem
 
@@ -145,9 +145,9 @@ chihiro003.jpg: 0.805 | thumb-chihiro001.png: 0.817 | thumb-chihiro002.png: 0.88
 **Grounding score improved on 5 of 8 images.** Largest gains: thumb-chihiro002.png (+0.239), thumb-chihiro008.png (+0.230), thumb-chihiro005.png (+0.121), thumb-chihiro007.png (+0.120), chihiro003.jpg (+0.065).  
 **Regressed on 3 images:** thumb-chihiro001.png (−0.039), thumb-chihiro004.png (−0.061), thumb-chihiro006.png (−0.014).  
 
-**The pass-rate gain is largely a length artifact.** Grounding pass requires 80–120 words; baseline produced 0 valid stories, improved produced 2. See length-equalised check below.
+**The pass-rate gain is largely a length artifact.** Grounding pass requires 80–120 words; baseline produced 0 valid stories, improved produced 2. See length-controlled check below.
 
-## Length-Equalised Evaluation (--fix-length)
+## Length-Controlled Evaluation (--fix-length)
 
 Run: `python main.py images/ --both --fix-length --output results_fixlen_new.csv`
 
@@ -171,7 +171,7 @@ chihiro003.jpg: 0.800 | thumb-chihiro001.png: 0.811 | thumb-chihiro002.png: 0.69
 Per-image grounding (improved fixlen):  
 chihiro003.jpg: 0.607 | thumb-chihiro001.png: 0.783 | thumb-chihiro002.png: 0.870 | thumb-chihiro004.png: 0.858 | thumb-chihiro005.png: 0.790 | thumb-chihiro006.png: 0.870 | thumb-chihiro007.png: 0.911 | thumb-chihiro008.png: 0.621
 
-### Length-Equalised: Before vs After
+### Length-Controlled: Before vs After
 
 | METRIC | BASELINE | IMPROVED | DELTA |
 |--------|----------|----------|-------|
@@ -185,7 +185,7 @@ chihiro003.jpg: 0.607 | thumb-chihiro001.png: 0.783 | thumb-chihiro002.png: 0.87
 | Mean story time (s) | 27.0 | 24.5 | −2.5 |
 | Mean total time (s) | 29.4 | 41.9 | +12.5 |
 
-**With length equalised, the grounding gain shrinks from +0.083 to +0.033**, and **baseline wins on grounding pass (5/8 vs 4/8)** because both produce 6 valid-length stories (length-valid tied at 6/8 each) but baseline scores higher on the ones that pass. The large normal-mode pass gain (+2 passes) was largely a length artifact.
+**With length controlled, the grounding gain shrinks from +0.083 to +0.033**, and **baseline wins on grounding pass (5/8 vs 4/8)** because both produce 6 valid-length stories (length-valid tied at 6/8 each) but baseline scores higher on the ones that pass. The large normal-mode pass gain (+2 passes) was largely a length artifact.
 
 Per-image grounding deltas (fixlen):
 - chihiro003.jpg: A=0.800 → B=0.607 (Δ=−0.193) **regressed**
@@ -331,7 +331,7 @@ These failures show the bottleneck: when the vision stage provides only a single
 
 ## Finding
 
-**Florence-2's structured visual extraction (detailed caption + OD + dense regions) raises grounding score by +0.083 normally and +0.033 when length is equalised, while substantially reducing NLI contradiction (−0.043 normal, −0.119 fixlen). In normal mode, grounding improved on 5/8 images and regressed on 3/8; in length-controlled mode, improved and baseline each win on 4/8 images, and baseline wins on grounding pass (5/8 vs 4/8) because both produce 6 valid-length stories. The single-sentence BLIP bottleneck is real and the richer visual representation helps on average, but Florence-2 introduces its own errors (false "dog", gender confusion) and the small Qwen model struggles to integrate longer contexts under length constraints.**
+**Florence-2's structured visual extraction (detailed caption + OD + dense regions) raises grounding score by +0.083 normally and +0.033 when length is controlled, while substantially reducing NLI contradiction (−0.043 normal, −0.119 fixlen). In normal mode, grounding improved on 5/8 images and regressed on 3/8; in length-controlled mode, improved and baseline each win on 4/8 images, and baseline wins on grounding pass (5/8 vs 4/8) because both produce 6 valid-length stories. The single-sentence BLIP bottleneck is real and the richer visual representation helps on average, but Florence-2 introduces its own errors (false "dog", gender confusion) and the small Qwen model struggles to integrate longer contexts under length constraints.**
 
 ## Reproducibility
 
