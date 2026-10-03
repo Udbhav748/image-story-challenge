@@ -312,23 +312,6 @@ Style: playful.
 
 ## Visual Examples
 
-### Self-Test Image (Metric Validation)
-
-The `selftest_image.jpg` is used by `python metric.py` to verify the evaluation pipeline with synthetic captions/stories.
-
-<p align="center">
-  <img src="selftest_image.jpg" alt="Self-test image: ginger cat in a blue bag" width="400"/>
-  <br>
-  <em>Self-test image: ginger cat in a blue bag</em>
-</p>
-
-**Caption used:** `a brown cat sitting inside a blue bag`
-
-| Story Type | Grounding | Pass |
-|------------|-----------|------|
-| Consistent (grounded) | 0.928 | ✅ |
-| Contradicting (hallucinated) | 0.158 | ❌ |
-
 ### Challenge Images (8 frames from *Spirited Away*)
 
 All 8 evaluation images are included in the `images/` folder. Run the full comparison:
