@@ -312,7 +312,7 @@ Style: playful.
 
 ## Visual Examples
 
-### Challenge Images (8 frames from *Spirited Away*)
+### Challenge Images with Generated Stories (8 frames from *Spirited Away*)
 
 All 8 evaluation images are included in the `images/` folder. Run the full comparison:
 
@@ -320,36 +320,109 @@ All 8 evaluation images are included in the `images/` folder. Run the full compa
 python main.py images/ --both --output results.csv
 ```
 
-| Image | Description | Baseline Grounding | Improved Grounding |
-|-------|-------------|-------------------|-------------------|
-| `chihiro003.jpg` | Street scene, European city | 0.740 | 0.805 |
-| `thumb-chihiro001.png` | Girl/boy in car with flowers | 0.856 | 0.817 |
-| `thumb-chihiro002.png` | Girl + monster statue in forest | 0.644 | 0.883 |
-| `thumb-chihiro004.png` | Family meal in restaurant | 0.895 | 0.834 |
-| `thumb-chihiro005.png` | Green-haired boy on balcony | 0.722 | 0.843 |
-| `thumb-chihiro006.png` | Pig in kitchen with food | 0.878 | 0.864 |
-| `thumb-chihiro007.png` | Chinese restaurant entrance | 0.787 | 0.907 |
-| `thumb-chihiro008.png` | Night town, video game style | 0.746 | 0.975 |
+---
+
+### 1. chihiro003.jpg — Street scene, European city
 
 <p align="center">
-  <img src="images/chihiro003.jpg" alt="chihiro003.jpg - European city street scene" width="300"/>
-  <img src="images/thumb-chihiro001.png" alt="thumb-chihiro001.png - Child in car with flowers" width="300"/>
+  <img src="images/chihiro003.jpg" alt="chihiro003.jpg - European city street scene" width="400"/>
 </p>
 
-<p align="center">
-  <img src="images/thumb-chihiro002.png" alt="thumb-chihiro002.png - Girl and monster statue" width="300"/>
-  <img src="images/thumb-chihiro004.png" alt="thumb-chihiro004.png - Family meal" width="300"/>
-</p>
+| Pipeline | Grounding | Words | Story |
+|----------|-----------|-------|-------|
+| **Baseline (BLIP)** | 0.740 | 71 | A man steps out onto the bustling street, his footsteps echoing through the concrete. He's dressed in a casual yet stylish outfit, a pair of jeans and a t-shirt that shows off his muscular build. The sun is shining brightly, casting a warm glow over the cityscape below. The man's eyes are fixed on the sidewalk, looking for something to grab. He's walking slowly, taking his time to enjoy the moment. |
+| **Improved (Florence-2)** | 0.805 | 61 | In the vibrant streets of a European city, a group of children played under the twinkling Christmas lights. A man, dressed in a festive suit, walked down the street, his eyes sparkling with excitement as he passed by the colorful buildings adorned with Christmas decorations. The children watched, their faces lit up by the cheerful cheer of the adults around them. |
+
+---
+
+### 2. thumb-chihiro001.png — Girl/boy in car with flowers
 
 <p align="center">
-  <img src="images/thumb-chihiro005.png" alt="thumb-chihiro005.png - Boy on balcony" width="300"/>
-  <img src="images/thumb-chihiro006.png" alt="thumb-chihiro006.png - Pig in kitchen" width="300"/>
+  <img src="images/thumb-chihiro001.png" alt="thumb-chihiro001.png - Child in car with flowers" width="400"/>
 </p>
 
+| Pipeline | Grounding | Words | Story |
+|----------|-----------|-------|-------|
+| **Baseline (BLIP)** | 0.856 | 45 | A girl sat in the back of a car, surrounded by colorful flowers. The sun shone through the window, casting a warm glow on her face. She was lost in thought as she gazed at the vibrant blooms, feeling grateful for the beauty around her. |
+| **Improved (Florence-2)** | 0.817 | 66 | In the heart of a bustling city, a young girl sat in the back seat of a sleek, modern car, her eyes fixed on the vibrant blooms around her. She held the bouquet in one hand, her fingers tracing the delicate petals with practiced ease. The scene was captured by a camera lens, capturing the essence of a moment that would soon be shared with others. |
+
+---
+
+### 3. thumb-chihiro002.png — Girl + monster statue in forest
+
 <p align="center">
-  <img src="images/thumb-chihiro007.png" alt="thumb-chihiro007.png - Chinese restaurant" width="300"/>
-  <img src="images/thumb-chihiro008.png" alt="thumb-chihiro008.png - Night town" width="300"/>
+  <img src="images/thumb-chihiro002.png" alt="thumb-chihiro002.png - Girl and monster statue" width="400"/>
 </p>
+
+| Pipeline | Grounding | Words | Story |
+|----------|-----------|-------|-------|
+| **Baseline (BLIP)** | 0.644 | 47 | A woman sits alone on a rocky outcropping, gazing out at the car that drives by. The sun sets over the horizon, casting long shadows across the landscape. She takes a deep breath, feeling the cool breeze on her face as she watches the world pass by. |
+| **Improved (Florence-2)** | 0.883 | 75 | In the heart of the dense forest, a young girl stood beside a large green monster statue, her eyes sparkling with excitement. She wore a simple green dress and a pair of sturdy boots, her laughter echoing through the trees. The car was parked nearby, its headlights casting long shadows on the ground. The scene was a stark contrast to the serene beauty of the forest, but the girl's presence was a joy to behold. |
+
+---
+
+### 4. thumb-chihiro004.png — Family meal in restaurant
+
+<p align="center">
+  <img src="images/thumb-chihiro004.png" alt="thumb-chihiro004.png - Family meal" width="400"/>
+</p>
+
+| Pipeline | Grounding | Words | Story |
+|----------|-----------|-------|-------|
+| **Baseline (BLIP)** | 0.895 | 30 | A man and woman sit at a table, sipping on coffee and savoring their meal. The aroma of freshly baked bread fills the air as they chat about their day. |
+| **Improved (Florence-2)** | 0.834 | 80 | In the bustling restaurant, the family sat at a table, their faces lit by the warm glow of the restaurant's lights. The man, with his rugged mustache and sharp eyes, was savoring a hot dog, while the woman, with her gentle demeanor, watched with a curious gaze. The child, nestled between them, was munching on a red fish, its vibrant colors adding to the din. The scene was one of joy and companionship, as the family enjoyed their meal together. |
+
+---
+
+### 5. thumb-chihiro005.png — Green-haired boy on balcony
+
+<p align="center">
+  <img src="images/thumb-chihiro005.png" alt="thumb-chihiro005.png - Boy on balcony" width="400"/>
+</p>
+
+| Pipeline | Grounding | Words | Story |
+|----------|-----------|-------|-------|
+| **Baseline (BLIP)** | 0.722 | 50 | A man in a formal suit and tie stands on a ledge, looking out over a cityscape. The sun glints off his polished leather jacket, casting a warm glow on his face. He takes a deep breath, feeling the tension in his muscles as he prepares to make a statement. |
+| **Improved (Florence-2)** | 0.843 | 53 | In a serene garden, a young man with green hair stands on a red railing, his eyes fixed on the distant balcony. He holds a small, delicate bird in his hand, its wings fluttering gently as it watches the world below. The scene is peaceful, filled with a sense of tranquility and beauty. |
+
+---
+
+### 6. thumb-chihiro006.png — Pig in kitchen with food
+
+<p align="center">
+  <img src="images/thumb-chihiro006.png" alt="thumb-chihiro006.png - Pig in kitchen" width="400"/>
+</p>
+
+| Pipeline | Grounding | Words | Story |
+|----------|-----------|-------|-------|
+| **Baseline (BLIP)** | 0.878 | 58 | A pig, with its long snout and bushy tail, was painting a picture of a man in a field. The pig's eyes were fixed on the figure, his brush strokes soft and gentle. The man's face was serene, his expression calm and composed. The pig's artistry was evident in every stroke, capturing the essence of the man's presence. |
+| **Improved (Florence-2)** | 0.864 | 47 | In a vibrant world, a pig with a blue shirt stands proudly, its eyes twinkling with mischief. It holds a green leafy vegetable in its mouth, its fur shimmering under the sun. In the background, a leafy tree casts a golden glow, adding to the lively scene. |
+
+---
+
+### 7. thumb-chihiro007.png — Chinese restaurant entrance
+
+<p align="center">
+  <img src="images/thumb-chihiro007.png" alt="thumb-chihiro007.png - Chinese restaurant" width="400"/>
+</p>
+
+| Pipeline | Grounding | Words | Story |
+|----------|-----------|-------|-------|
+| **Baseline (BLIP)** | 0.787 | 76 | In the dimly lit restaurant, the soft glow of the overhead light bathed the tables in a warm, inviting light. The air was filled with the scent of freshly baked bread and the aroma of steaming coffee. A friendly waiter greeted each patron with a warm smile, and the conversation flowed effortlessly as they sipped their coffee and ate their meals. The atmosphere was cozy and welcoming, perfect for a special occasion or a casual dinner. |
+| **Improved (Florence-2)** | 0.907 | 118 | In the heart of the bustling city, amidst the vibrant lights and laughter, a cozy Chinese restaurant stood as a beacon of warmth and tradition. The entrance was adorned with twinkling lanterns that cast a gentle glow over the tables. A wooden stool sat gracefully in the center, its legs resting on a sturdy chair, while a bird perched on a branch nearby, its feathers shimmering under the soft glow of the lantern. The air was filled with the sweet aroma of steaming hot food and the melodious tunes of traditional Chinese music playing softly in the background. This scene captured the essence of a welcoming and festive atmosphere, perfect for a memorable meal or a warm conversation. |
+
+---
+
+### 8. thumb-chihiro008.png — Night town, video game style
+
+<p align="center">
+  <img src="images/thumb-chihiro008.png" alt="thumb-chihiro008.png - Night town" width="400"/>
+</p>
+
+| Pipeline | Grounding | Words | Story |
+|----------|-----------|-------|-------|
+| **Baseline (BLIP)** | 0.746 | 76 | In the heart of a bustling town, a man sat on a bench, his eyes fixed on a distant dog. The dog, a golden retriever, wagged its tail in greeting. The man's face lit up as he watched the dog play with a toy, its tail swishing back and forth. The dog, in turn, wagged its tail back and forth, its eyes sparkling with joy. The man smiled, feeling grateful for the simple bond between them. |
+| **Improved (Florence-2)** | 0.975 | 36 | In a small, dimly lit room, a figure stood before a small red building with a green door and red lights. The figure wore a dark cloak and held a small red building in her hands. |
 
 ---
 
