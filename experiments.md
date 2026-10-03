@@ -93,6 +93,21 @@ Every `(image, caption/context, story)` tuple scored by `metric.py`:
 
 `grounding_pass` = all three: score ≥ 0.60, no attribute conflict, length valid.
 
+### Evaluation Interpretation Table
+
+| Evaluation Signal | Normal Baseline | Normal Improved | Fixlen Baseline | Fixlen Improved | Interpretation |
+|-------------------|----------------|----------------|-----------------|----------------|----------------|
+| Grounding Score   | 0.783          | **0.866**      | 0.756           | **0.789**      | Higher = stronger alignment |
+| CLIP Similarity   | 0.233          | **0.258**      | 0.240           | **0.253**      | Higher = stronger image-story semantic similarity |
+| NLI Contradiction | 0.098          | **0.055**      | 0.207           | **0.088**      | Lower = fewer textual contradictions with context |
+| Repetition Rate   | 0.0034         | 0.0073         | 0.0068          | 0.0118         | Lower = less repeated phrasing |
+| Entity Consistency| 1.000          | 1.000          | 1.000           | 1.000          | Higher = stronger cross-frame consistency |
+| Length Valid      | 0/8            | **2/8**        | 6/8             | 6/8            | Requirement compliance |
+| Grounding Pass    | 0/8            | **2/8**        | **5/8**         | 4/8            | Composite threshold |
+| Runtime (total)   | 13.4 s         | 27.0 s         | 29.4 s          | 41.9 s         | Lower = more efficient |
+
+> **Note:** NLI evaluates contradiction between the **story and the generated context/caption** — it measures *consistency with the extracted visual context*, not independent image verification. Only CLIP directly compares image to story. These are automatic proxies — not perfect human-quality measures.
+
 ## Normal Evaluation (no length control)
 
 | Metric | Baseline (BLIP) | Improved (Florence-2) | Delta |
@@ -127,8 +142,8 @@ chihiro003.jpg: 0.805 | thumb-chihiro001.png: 0.817 | thumb-chihiro002.png: 0.88
 | Mean story time (s) | 9.1 | 8.8 | −0.3 |
 | Mean total time (s) | 13.4 | 27.0 | +13.6 |
 
-**Grounding score improved on 6 of 8 images.** Largest gains: thumb-chihiro002.png (+0.239), thumb-chihiro008.png (+0.230), thumb-chihiro005.png (+0.121), thumb-chihiro007.png (+0.120), chihiro003.jpg (+0.065).  
-**Regressed on 2 images:** thumb-chihiro001.png (−0.039), thumb-chihiro004.png (−0.061), thumb-chihiro006.png (−0.014).  
+**Grounding score improved on 5 of 8 images.** Largest gains: thumb-chihiro002.png (+0.239), thumb-chihiro008.png (+0.230), thumb-chihiro005.png (+0.121), thumb-chihiro007.png (+0.120), chihiro003.jpg (+0.065).  
+**Regressed on 3 images:** thumb-chihiro001.png (−0.039), thumb-chihiro004.png (−0.061), thumb-chihiro006.png (−0.014).  
 
 **The pass-rate gain is largely a length artifact.** Grounding pass requires 80–120 words; baseline produced 0 valid stories, improved produced 2. See length-equalised check below.
 
@@ -170,7 +185,7 @@ chihiro003.jpg: 0.607 | thumb-chihiro001.png: 0.783 | thumb-chihiro002.png: 0.87
 | Mean story time (s) | 27.0 | 24.5 | −2.5 |
 | Mean total time (s) | 29.4 | 41.9 | +12.5 |
 
-**With length equalised, the grounding gain shrinks from +0.083 to +0.033**, and **baseline wins on grounding pass (5/8 vs 4/8)** because both produce 6 valid-length stories but baseline scores higher on the ones that pass. The large normal-mode pass gain (+2 passes) was largely a length artifact.
+**With length equalised, the grounding gain shrinks from +0.083 to +0.033**, and **baseline wins on grounding pass (5/8 vs 4/8)** because both produce 6 valid-length stories (length-valid tied at 6/8 each) but baseline scores higher on the ones that pass. The large normal-mode pass gain (+2 passes) was largely a length artifact.
 
 Per-image grounding deltas (fixlen):
 - chihiro003.jpg: A=0.800 → B=0.607 (Δ=−0.193) **regressed**
@@ -182,7 +197,7 @@ Per-image grounding deltas (fixlen):
 - thumb-chihiro007.png: A=0.777 → B=0.911 (Δ=+0.133) **improved**
 - thumb-chihiro008.png: A=0.488 → B=0.621 (Δ=+0.133) **improved**
 
-**Fixlen summary:** Improved wins on 4/8 images, baseline wins on 4/8. The grounding gain is real but smaller (+0.033 vs +0.083). NLI contradiction is substantially reduced (−0.119). Baseline wins on pass rate when length is controlled.
+**Fixlen summary:** Improved wins on 4/8 images, baseline wins on 4/8. The grounding gain is real but smaller (+0.033 vs +0.083). NLI contradiction is substantially reduced (−0.119). Baseline wins on grounding pass (5/8 vs 4/8) when length is controlled, even though length-valid is tied at 6/8 each.
 
 ## Runtime
 
@@ -316,7 +331,7 @@ These failures show the bottleneck: when the vision stage provides only a single
 
 ## Finding
 
-**Florence-2's structured visual extraction (detailed caption + OD + dense regions) raises grounding score by +0.083 normally and +0.033 when length is equalised, while substantially reducing NLI contradiction (−0.043 normal, −0.119 fixlen). However, 3–4 of 8 images regress due to Florence-2's own mispredictions (false "dog", gender confusion) and the small Qwen model's difficulty integrating longer contexts under length constraints. The single-sentence BLIP bottleneck is real; the fix works on net but is not universal, and the small Qwen model remains the weak link for length control and context integration.**
+**Florence-2's structured visual extraction (detailed caption + OD + dense regions) raises grounding score by +0.083 normally and +0.033 when length is equalised, while substantially reducing NLI contradiction (−0.043 normal, −0.119 fixlen). In normal mode, grounding improved on 5/8 images and regressed on 3/8; in length-controlled mode, improved and baseline each win on 4/8 images, and baseline wins on grounding pass (5/8 vs 4/8) because both produce 6 valid-length stories. The single-sentence BLIP bottleneck is real and the richer visual representation helps on average, but Florence-2 introduces its own errors (false "dog", gender confusion) and the small Qwen model struggles to integrate longer contexts under length constraints.**
 
 ## Reproducibility
 

@@ -221,6 +221,21 @@ Evaluation is a first-class part of the pipeline. Every `(image, context, story)
 
 > **Important:** NLI evaluates contradiction between the **story and the generated context/caption** — it measures *consistency with the extracted visual context*, not independent image verification. Only CLIP directly compares image to story. These are automatic proxies — not perfect human-quality measures.
 
+### Evaluation Interpretation Table
+
+| Evaluation Signal | Normal Baseline | Normal Improved | Fixlen Baseline | Fixlen Improved | Interpretation |
+|-------------------|----------------|----------------|-----------------|----------------|----------------|
+| Grounding Score   | 0.783          | **0.866**      | 0.756           | **0.789**      | Higher = stronger alignment |
+| CLIP Similarity   | 0.233          | **0.258**      | 0.240           | **0.253**      | Higher = stronger image-story semantic similarity |
+| NLI Contradiction | 0.098          | **0.055**      | 0.207           | **0.088**      | Lower = fewer textual contradictions with context |
+| Repetition Rate   | 0.0034         | 0.0073         | 0.0068          | 0.0118         | Lower = less repeated phrasing |
+| Entity Consistency| 1.000          | 1.000          | 1.000           | 1.000          | Higher = stronger cross-frame consistency |
+| Length Valid      | 0/8            | **2/8**        | 6/8             | 6/8            | Requirement compliance |
+| Grounding Pass    | 0/8            | **2/8**        | **5/8**         | 4/8            | Composite threshold |
+| Runtime (total)   | 13.4 s         | 27.0 s         | 29.4 s          | 41.9 s         | Lower = more efficient |
+
+> **Note:** NLI evaluates contradiction between the **story and the generated context/caption** — it measures *consistency with the extracted visual context*, not independent image verification. Only CLIP directly compares image to story. These are automatic proxies — not perfect human-quality measures.
+
 ---
 
 ## Baseline vs Improved Results
@@ -278,15 +293,15 @@ With `--fix-length`, both pipelines retry generation up to 3 times with stricter
 | thumb-chihiro007.png | +0.120 | +0.133 | **Improved**: dense regions gave "lantern, stool, bowl, bird" | **Improved**: consistent gain |
 | thumb-chihiro008.png | +0.230 | +0.133 | **Improved**: detailed caption corrected "town + dog" → "video game screenshot" | **Improved**: gain persists but smaller |
 
-**Normal mode:** Improvements on 6/8 images. Largest gains on 002 (+0.239), 008 (+0.230), 005 (+0.121), 007 (+0.120). Regressions on 2/8 images: 001 (−0.039), 004 (−0.061), 006 (−0.014).
+**Normal mode:** Improvements on 5/8 images. Largest gains on 002 (+0.239), 008 (+0.230), 005 (+0.121), 007 (+0.120), 003 (+0.065). Regressions on 3/8 images: 001 (−0.039), 004 (−0.061), 006 (−0.014).
 
-**Fixlen mode:** Improvements on 4/8 images (002, 005, 007, 008). Regressions on 4/8 images: 001, 003, 004, 006. The grounding gain is real but smaller (+0.033 vs +0.083). Baseline wins on pass rate (5/8 vs 4/8) when length is controlled.
+**Fixlen mode:** Improvements on 4/8 images (002, 005, 007, 008). Regressions on 4/8 images: 001, 003, 004, 006. The grounding gain is real but smaller (+0.033 vs +0.083). Baseline wins on grounding pass (5/8 vs 4/8) when length is controlled, even though length-valid is tied at 6/8 each.
 
 ---
 
 ## Key Finding
 
-> **Florence-2's structured visual extraction (detailed caption + OD + dense regions) raises grounding score by +0.083 normally and +0.033 when length is equalised, while substantially reducing NLI contradiction (−0.043 normal, −0.119 fixlen). However, 3–4 of 8 images regress due to Florence-2's own mispredictions (false "dog", gender confusion) and the small Qwen model's difficulty integrating longer contexts under length constraints. The single-sentence BLIP bottleneck is real; the fix works on net but is not universal, and the small Qwen model remains the weak link for length control and context integration.**
+> **Florence-2's structured visual extraction (detailed caption + OD + dense regions) raises grounding score by +0.083 normally and +0.033 when length is equalised, while substantially reducing NLI contradiction (−0.043 normal, −0.119 fixlen). In normal mode, grounding improved on 5/8 images and regressed on 3/8; in length-controlled mode, improved and baseline each win on 4/8 images, and baseline wins on grounding pass (5/8 vs 4/8) because both produce 6 valid-length stories. The single-sentence BLIP bottleneck is real and the richer visual representation helps on average, but Florence-2 introduces its own errors (false "dog", gender confusion) and the small Qwen model struggles to integrate longer contexts under length constraints.**
 
 **Runtime tradeoff:** Seeing cost increases ~4–7× (4.3 s → 18.1 s/image normal; 2.4 s → 17.4 s fixlen). Story generation remains similar in normal mode (~9 s); fixlen multiplies story time ~3× due to retries. Total pipeline ~2× slower normal, ~1.4× slower fixlen.
 
