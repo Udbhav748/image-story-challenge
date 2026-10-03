@@ -97,7 +97,7 @@ def evaluate_run(rows, out_csv):
     return res
 
 if __name__ == "__main__":  # self-test with SYNTHETIC strings (test only)
-    img = r"D:\Projects\tournament\Module-6---Practical-Computer-Vision-Exercises\first_image.jpg"
+    img = os.path.join(os.path.dirname(os.path.abspath(__file__)), "selftest_image.jpg")  # ginger cat in a blue bag
     print("Image:", img, "| load_models s:", round(TIMINGS["load_models"][0], 2))
     cap = "a brown cat sitting inside a blue bag"
     good = ("The little brown cat curled up inside the blue bag and watched the room with wide amber eyes. "
