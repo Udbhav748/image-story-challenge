@@ -12,23 +12,35 @@ from transformers import BlipProcessor, BlipForConditionalGeneration, AutoTokeni
 BLIP_ID = "Salesforce/blip-image-captioning-base"
 QWEN_ID = "Qwen/Qwen2.5-0.5B-Instruct"
 SEED = 0
+MIN_WORDS, MAX_WORDS = 80, 120  # benchmark length requirement
 _m = {}
 load_times = {}
 
+
+def is_length_valid(word_count):
+    """The benchmark length rule, defined once: 80 <= words <= 120 (a requirement, not a quality measure)."""
+    return MIN_WORDS <= word_count <= MAX_WORDS
+
+
+def warm_up(blip=True, qwen=True):
+    """Load models now so that per-image timings never include model-load time (see load_times)."""
+    if blip: _blip()
+    if qwen: _qwen()
+
 def _blip():
     if "blip" not in _m:
-        t = time.time()
+        t = time.perf_counter()
         _m["blip"] = (BlipProcessor.from_pretrained(BLIP_ID),
                       BlipForConditionalGeneration.from_pretrained(BLIP_ID).eval())
-        load_times["blip"] = time.time() - t
+        load_times["blip"] = time.perf_counter() - t
     return _m["blip"]
 
 def _qwen():
     if "qwen" not in _m:
-        t = time.time()
+        t = time.perf_counter()
         _m["qwen"] = (AutoTokenizer.from_pretrained(QWEN_ID),
                       AutoModelForCausalLM.from_pretrained(QWEN_ID, torch_dtype=torch.float32).eval())
-        load_times["qwen"] = time.time() - t
+        load_times["qwen"] = time.perf_counter() - t
     return _m["qwen"]
 
 def caption_blip(image_path):
@@ -60,7 +72,7 @@ def _sentences(text):
     import re
     return [s for s in re.split(r"(?<=[.!?])\s+", text.strip()) if s]
 
-def _fit_length(story, hi=120):
+def _fit_length(story, hi=MAX_WORDS):
     """Keep whole sentences only (drops a cut-off tail), then stop adding sentences once past `hi` words."""
     sents = _sentences(story)
     if sents and not sents[-1].rstrip('"\'').endswith((".", "!", "?")):
@@ -73,22 +85,33 @@ def _fit_length(story, hi=120):
     return " ".join(kept) if kept else story
 
 def write_story(context_text, fix_length=False):
+    """Write a story from a context string with Qwen.
+
+    fix_length=False: one greedy generation with the original prompt (max 200 new tokens).
+    fix_length=True ("length-controlled"): up to 3 greedy attempts, each with a stricter length prompt
+    (LENGTH_PROMPTS) and a 230-token cap. Every attempt is cut to whole sentences (a cut-off last sentence
+    is dropped) and to at most 120 words. The first attempt with 80-120 words is returned; if none qualifies,
+    the attempt whose length is closest to 100 words is returned. This does NOT produce equal word counts.
+    """
     if not fix_length:
         return _generate(context_text, LENGTH_PROMPTS[0], 200)
     best = None
     for template in LENGTH_PROMPTS:  # retry with a stricter length prompt until the story is 80-120 words
         story = _fit_length(_generate(context_text, template, 230))
         wc = len(story.split())
-        if 80 <= wc <= 120: return story
+        if is_length_valid(wc): return story
         if best is None or abs(wc - 100) < abs(len(best.split()) - 100): best = story
     return best
 
 def run(image_path, fix_length=False):
-    t = time.time(); cap = caption_blip(image_path); cs = time.time() - t
-    t = time.time(); story = write_story(cap, fix_length); ss = time.time() - t
+    """Baseline pipeline for one image. Timings (perf_counter) exclude model loading, which is done first."""
+    warm_up()
+    t = time.perf_counter(); cap = caption_blip(image_path); cs = time.perf_counter() - t
+    t = time.perf_counter(); story = write_story(cap, fix_length); ss = time.perf_counter() - t
     wc = len(story.split())
     return {"image": str(image_path), "caption": cap, "story": story, "word_count": wc,
-            "length_valid": 80 <= wc <= 120, "caption_s": round(cs, 2), "story_s": round(ss, 2)}
+            "length_valid": is_length_valid(wc), "caption_s": round(cs, 2), "story_s": round(ss, 2),
+            "generation_s": round(cs + ss, 2)}
 
 if __name__ == "__main__":
     for p in sys.argv[1:]:

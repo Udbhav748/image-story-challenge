@@ -1,25 +1,44 @@
-"""Grounding metric for Image -> Story (Module 10: evaluation + runtime logging).
+"""Evaluation metrics for Image -> Story (Module 10: evaluation + runtime logging).
 
-grounding_score = 0.4*clip_n + 0.4*(1 - nli_contra_mean) + 0.2*(1 - conflict)
-  clip_n    = clip((clip_image_story_mean - 0.15) / (0.30 - 0.15), 0, 1)
-              (CLIP ViT-B/32 cosine for matching text is ~0.25-0.32, unrelated ~0.10-0.18)
-  nli_contra_mean = mean P(contradiction | premise=caption, hypothesis=story sentence)
-  conflict  = 1 if a color/material word in the story contradicts the caption, else 0
-grounding_pass = grounding_score >= 0.60 AND no attribute conflict AND length_valid.
+Per image-story pair (score):
+  grounding_score = 0.4*clip_n + 0.4*(1 - nli_contra_mean) + 0.2*(0 if attribute_conflict else 1)
+    clip_n          = clip((clip_image_story_mean - 0.15) / 0.15, 0, 1)
+                      CLIP ViT-B/32 cosine between the IMAGE and each story sentence, averaged.
+                      This is the only signal that compares the story with the image itself.
+    nli_contra_mean = mean P(contradiction | premise = supplied context, hypothesis = story sentence).
+                      NLI measures TEXTUAL consistency between the story and the supplied/generated visual
+                      context (BLIP caption or the structured Florence-2 context). It is not independent
+                      verification of the image: if the context is wrong, a story faithful to it still scores well.
+    attribute_conflict = deterministic textual check of colour/material words (a different colour or material
+                      than the context names, or a material whose usual colour the context's colour excludes,
+                      e.g. caption "white cabinets" vs story "oak cabinet"). See attribute_conflict().
+  grounding_score is a composite automatic proxy, not ground truth.
+
+  length_valid   = 80 <= word_count <= 120. This is a benchmark requirement, not a quality measure: a story can be
+                   well aligned with the image but too short, or the right length and visually wrong.
+  grounding_pass = grounding_score >= 0.60 AND no attribute conflict AND length_valid.
+
+Also reported (not part of grounding_score): truncated, repetition metrics, runtime.
+
+continuity_score (multi-image only, see main.py --multi) is a lightweight structural proxy based on entity
+overlap and transition words. It does not evaluate narrative coherence.
 """
 import os, re, time, csv
 from contextlib import ContextDecorator
 from collections import Counter
 
-# HF_HOME: use environment variable if set, otherwise let Hugging Face use its default cache
-# os.environ.setdefault("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
+# HF_HOME: use the environment variable if set, otherwise Hugging Face's default cache is used.
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 import torch
 from PIL import Image
 from transformers import CLIPModel, CLIPProcessor, AutoTokenizer, AutoModelForSequenceClassification
 
+from context_builder import frame_entities, recurring_entities, normalize_entity
+from baseline import is_length_valid
+
 THRESHOLD = 0.60
+CLIP_LOW, CLIP_SPAN = 0.15, 0.15  # clip_n = clip((cos - 0.15) / 0.15, 0, 1); untuned heuristic range
 TIMINGS = {}  # stage name -> list of seconds
 
 
@@ -38,20 +57,52 @@ with Timer("load_models"):
     _nli = AutoModelForSequenceClassification.from_pretrained(_nli_name).eval()
 _CONTRA = [i for i, l in _nli.config.id2label.items() if l.lower() == "contradiction"][0]
 
-GROUPS = {"color": {"white", "black", "red", "blue", "green", "yellow", "brown", "grey", "gray", "pink", "orange", "purple"},
-          "material": {"wood", "wooden", "oak", "glass", "metal", "steel", "plastic", "stone", "marble", "brick", "leather"}}
+COLORS = {"white", "black", "red", "blue", "green", "yellow", "brown", "grey", "pink", "orange", "purple"}
+MATERIAL_FAMILIES = {"wood": {"wood", "wooden", "oak"}, "glass": {"glass"}, "metal": {"metal", "steel"},
+                     "plastic": {"plastic"}, "stone": {"stone", "marble"}, "brick": {"brick"}, "leather": {"leather"}}
+TYPICAL_COLOR = {"wood": {"brown"}}  # colour a material normally implies (heuristic; see attribute_conflict)
+_MATERIAL_WORDS = {w: fam for fam, ws in MATERIAL_FAMILIES.items() for w in ws}
 
 
 def split_sentences(text): return [s.strip() for s in re.split(r"(?<=[.!?])\s+", text.strip()) if s.strip()]
-def words(text): return set(re.findall(r"[a-z]+", text.lower()))
+def words(text): return {"grey" if w == "gray" else w for w in re.findall(r"[a-z]+", text.lower())}
 
 
 def attribute_conflict(caption, story):
-    """Per group: if caption names words of the group and story names words of it not in caption -> offending."""
+    """Deterministic textual check of colour/material words; returns the offending story words.
+
+    1. Colour: the caption names a colour and the story names a different colour -> conflict.
+    2. Material: the caption names a material family (wood, wooden and oak are one family) and the story names
+       another family -> conflict.
+    3. Implied colour: the caption names a colour, names no word of the story's material family, and the
+       material normally implies a different colour (oak/wood -> brown) -> conflict. A heuristic: a white-painted
+       wooden cabinet is legitimate, so this can raise false alarms.
+    Nothing is checked for a group the caption does not mention.
+    """
     cw, sw, bad = words(caption), words(story), []
-    for g in GROUPS.values():
-        if cw & g: bad += sorted((sw & g) - cw)
+    cap_colors, story_mats = cw & COLORS, sorted(sw & set(_MATERIAL_WORDS))
+    if cap_colors:
+        bad += sorted((sw & COLORS) - cw)
+    cap_fams = {_MATERIAL_WORDS[w] for w in cw if w in _MATERIAL_WORDS}
+    for w in story_mats:
+        fam = _MATERIAL_WORDS[w]
+        if cap_fams and fam not in cap_fams:
+            bad.append(w)
+        elif not cap_fams and cap_colors and fam in TYPICAL_COLOR and not (TYPICAL_COLOR[fam] & cap_colors):
+            bad.append(w)
     return bad
+
+
+def grounding_from_components(clip_mean, nli_contra_mean, has_conflict):
+    """The grounding formula in one place (used by score() and by the tests). Returns (clip_n, grounding_score)."""
+    clip_n = min(max((clip_mean - CLIP_LOW) / CLIP_SPAN, 0.0), 1.0)
+    g = 0.4 * clip_n + 0.4 * (1 - nli_contra_mean) + 0.2 * (0 if has_conflict else 1)
+    return clip_n, g
+
+
+def is_grounding_pass(grounding_score, conflicts, length_valid):
+    """grounding_pass definition: score >= THRESHOLD AND no attribute conflict AND length_valid."""
+    return bool(grounding_score >= THRESHOLD and not conflicts and length_valid)
 
 
 @torch.no_grad()
@@ -68,216 +119,124 @@ def _contradiction_probs(caption, sentences):
 
 
 def repetition_score(story: str) -> dict:
-    """
-    Lightweight deterministic repetition metrics.
-    Returns dict with:
-      - repeated_sentences: count of duplicate sentences
-      - repeated_bigrams: count of repeated word bigrams
-      - repeated_trigrams: count of repeated word trigrams
-      - repetition_rate: repeated_units / total_units (using trigrams)
-      - distinct3: 1 - repetition_rate (compat with existing)
+    """Lightweight deterministic repetition metrics (trigram based).
+
+    repetition_rate = repeated_trigrams / total_trigrams ; distinct3 = 1 - repetition_rate.
     """
     sents = split_sentences(story)
     toks = re.findall(r"[a-z']+", story.lower())
-    
-    # Sentence-level repetition
-    sent_counts = Counter(sents)
-    repeated_sentences = sum(c - 1 for c in sent_counts.values() if c > 1)
-    
-    # Bigram repetition
+
+    repeated_sentences = sum(c - 1 for c in Counter(sents).values() if c > 1)
     bigrams = list(zip(toks, toks[1:])) if len(toks) > 1 else []
-    bigram_counts = Counter(bigrams)
-    repeated_bigrams = sum(c - 1 for c in bigram_counts.values() if c > 1)
-    
-    # Trigram repetition (existing distinct3)
+    repeated_bigrams = sum(c - 1 for c in Counter(bigrams).values() if c > 1)
     trigrams = list(zip(toks, toks[1:], toks[2:])) if len(toks) > 2 else []
-    trigram_counts = Counter(trigrams)
-    repeated_trigrams = sum(c - 1 for c in trigram_counts.values() if c > 1)
-    
-    total_trigrams = len(trigrams)
-    repetition_rate = repeated_trigrams / total_trigrams if total_trigrams > 0 else 0.0
-    distinct3 = 1.0 - repetition_rate if total_trigrams > 0 else 1.0
-    
+    repeated_trigrams = sum(c - 1 for c in Counter(trigrams).values() if c > 1)
+
+    rate = repeated_trigrams / len(trigrams) if trigrams else 0.0
     return {
         "repeated_sentences": repeated_sentences,
         "repeated_bigrams": repeated_bigrams,
         "repeated_trigrams": repeated_trigrams,
-        "repetition_rate": round(repetition_rate, 4),
-        "distinct3": round(distinct3, 4),
+        "repetition_rate": round(rate, 4),
+        "distinct3": round(1.0 - rate if trigrams else 1.0, 4),
     }
 
 
-def continuity_score(image_contexts: list, story: str) -> dict:
-    """
-    Sequence coherence/continuity metric for multi-image stories.
-    Compares adjacent image contexts and story content.
-    Returns dict with:
-      - entity_consistency: fraction of recurring entities mentioned in story
-      - transition_markers: count of temporal/transition words
-      - adjacent_similarity: placeholder for CLIP-based adjacent frame consistency
-    """
-    if not image_contexts or len(image_contexts) < 2:
-        return {
-            "entity_consistency": 1.0,
-            "transition_markers": 0,
-            "adjacent_similarity": 1.0,
-        }
-    
-    # Extract key entities from each image context (characters + objects)
-    context_entities = []
-    for ctx in image_contexts:
-        entities = set()
-        # Characters
-        for c in ctx.get("characters", []):
-            entities.add(c.lower())
-        # Objects (simple ones only)
-        for o in ctx.get("objects", []):
-            if len(o.split()) <= 2:  # prefer OD-style labels
-                entities.add(o.lower())
-        # Region descriptions - extract nouns
-        for r in ctx.get("region_descriptions", [])[:3]:
-            nouns = re.findall(r"\b(?:building|person|man|woman|girl|boy|child|car|tree|flower|pig|bird|chair|table|bowl|lantern|stool|window|house|street|city|forest|restaurant|kitchen|balcony|town)\b", r.lower())
-            entities.update(nouns)
-        context_entities.append(entities)
-    
-    # Find recurring entities (appear in 2+ contexts)
-    all_entities = set()
-    for e_set in context_entities:
-        all_entities.update(e_set)
-    
-    recurring = set()
-    for ent in all_entities:
-        count = sum(1 for e_set in context_entities if ent in e_set)
-        if count >= 2:
-            recurring.add(ent)
-    
-    # Check how many recurring entities appear in the story
-    story_words = set(re.findall(r"[a-z]+", story.lower()))
-    mentioned_recurring = sum(1 for ent in recurring if ent in story_words)
-    entity_consistency = mentioned_recurring / len(recurring) if recurring else 1.0
-    
-    # Transition markers
-    transition_words = {"then", "next", "after", "later", "suddenly", "meanwhile", "as", "when", "while",
-                        "before", "following", "subsequently", "continues", "continues to", "moves to",
-                        "goes to", "walks to", "runs to", "arrives", "reaches", "enters", "leaves"}
-    story_lower = story.lower()
-    transition_count = sum(1 for tw in transition_words if tw in story_lower)
-    
-    # Adjacent similarity (simplified: entity overlap between adjacent contexts)
-    adjacent_overlaps = []
-    for i in range(len(context_entities) - 1):
-        overlap = len(context_entities[i] & context_entities[i + 1])
-        union = len(context_entities[i] | context_entities[i + 1])
-        adjacent_overlaps.append(overlap / union if union > 0 else 1.0)
-    adjacent_similarity = sum(adjacent_overlaps) / len(adjacent_overlaps) if adjacent_overlaps else 1.0
-    
-    return {
-        "entity_consistency": round(entity_consistency, 4),
-        "transition_markers": transition_count,
-        "adjacent_similarity": round(adjacent_similarity, 4),
-    }
+TRANSITION_WORDS = {"then", "next", "after", "afterwards", "later", "suddenly", "meanwhile",
+                    "before", "finally", "soon", "eventually", "following"}
 
 
-def score(image_path, caption, story, image_contexts: list = None):
+def continuity_score(descs: list, story: str) -> dict:
+    """Lightweight structural continuity proxy for a MULTI-image story. Needs >= 2 ordered frames.
+
+    descs: ordered per-frame structured vision outputs (characters + od_labels are used).
+    - recurring_entities: entities present in at least two different frames (normalised labels from the vision stage).
+    - entity_consistency: fraction of recurring entities that the story mentions. None when no entity recurs.
+    - transition_markers: number of transition words in the story (whole-word match).
+    - adjacent_similarity: mean Jaccard overlap of entity sets of adjacent frames (frames with no entities skipped).
+    This is an overlap-and-lexicon proxy; it does not measure narrative coherence. Generic recurring labels
+    (for example "person") count like any other recurring entity, so read the listed entities alongside the score.
     """
-    Score a single image-story pair.
-    If image_contexts provided (list of all contexts in sequence), also computes continuity.
+    n = len(descs or [])
+    result = {"num_frames": n, "recurring_entities": [], "recurring_count": 0,
+              "entity_consistency": None, "transition_markers": None, "adjacent_similarity": None}
+    if n < 2:
+        return result  # not applicable for a single image
+
+    frames = [frame_entities(d) for d in descs]
+    recurring = recurring_entities(frames)
+    story_norm = " " + " ".join(normalize_entity(w) for w in re.findall(r"[a-z']+", story.lower())) + " "
+    mentioned = [e for e in recurring if f" {e} " in story_norm]
+
+    overlaps = [len(a & b) / len(a | b) for a, b in zip(frames, frames[1:]) if (a | b)]
+    result.update({
+        "recurring_entities": recurring,
+        "recurring_count": len(recurring),
+        "entity_consistency": round(len(mentioned) / len(recurring), 4) if recurring else None,
+        "transition_markers": sum(1 for t in re.findall(r"[a-z]+", story.lower()) if t in TRANSITION_WORDS),
+        "adjacent_similarity": round(sum(overlaps) / len(overlaps), 4) if overlaps else None,
+    })
+    return result
+
+
+def score(image_path, caption, story):
+    """Score one image-story pair against the supplied context/caption. Single-image metrics only.
+
+    Evaluation runtime is reported separately from generation runtime (perf_counter, models already loaded):
+    eval_clip_s (CLIP), eval_nli_s (NLI), eval_rules_s (attribute check, repetition, formula), eval_total_s.
     """
     t0 = time.perf_counter()
     sents = split_sentences(story) or [story]
     wc = len(story.split())
     image = Image.open(image_path).convert("RGB")
+    t = time.perf_counter()
     with Timer("clip"):
         s = _clip_sims(image, sents + [caption])
+    clip_s = time.perf_counter() - t
     sent_sims, cap_sim = s[:-1], float(s[-1])
+    t = time.perf_counter()
     with Timer("nli"):
         c = _contradiction_probs(caption, sents)
+    nli_s = time.perf_counter() - t
+    t = time.perf_counter()
     bad = attribute_conflict(caption, story)
     clip_mean = float(sent_sims.mean())
-    clip_n = min(max((clip_mean - 0.15) / 0.15, 0.0), 1.0)
-    g = 0.4 * clip_n + 0.4 * (1 - float(c.mean())) + 0.2 * (0 if bad else 1)
-    ok_len = 80 <= wc <= 120
-    
-    # Repetition metrics
+    _, g = grounding_from_components(clip_mean, float(c.mean()), bool(bad))
+    ok_len = is_length_valid(wc)
     rep = repetition_score(story)
-    
-    # Continuity metrics (if contexts provided)
-    cont = continuity_score(image_contexts or [], story)
-    
-    result = {
+    rules_s = time.perf_counter() - t
+
+    return {
         "word_count": wc, "length_valid": ok_len,
         "truncated": not story.strip().rstrip('"\'').endswith((".", "!", "?")),
         "clip_image_story_mean": clip_mean, "clip_image_story_min": float(sent_sims.min()),
         "clip_image_caption": cap_sim,
         "nli_contra_mean": float(c.mean()), "nli_contra_max": float(c.max()),
         "attribute_conflict": bad, "grounding_score": g,
-        "grounding_pass": bool(g >= THRESHOLD and not bad and ok_len),
-        "runtime_s": time.perf_counter() - t0,
+        "grounding_pass": is_grounding_pass(g, bad, ok_len),
         **rep,
-        **cont,
+        "eval_clip_s": round(clip_s, 3), "eval_nli_s": round(nli_s, 3), "eval_rules_s": round(rules_s, 4),
+        "eval_total_s": round(time.perf_counter() - t0, 3),
     }
-    return result
 
 
-def evaluate_run(rows, out_csv, image_contexts_by_image: dict = None):
-    """
-    rows: list of {image, caption, story}.
-    image_contexts_by_image: dict image_id -> full context dict (for continuity).
-    Writes CSV, prints means and failure counts.
-    """
-    res = []
-    for r in rows:
-        img_id = os.path.basename(r["image"])
-        contexts = image_contexts_by_image.get(img_id, []) if image_contexts_by_image else None
-        # For multi-image, pass all contexts in sequence order
-        if image_contexts_by_image:
-            # Get all contexts in order
-            all_contexts = list(image_contexts_by_image.values())
-            m = score(r["image"], r["caption"], r["story"], all_contexts)
-        else:
-            m = score(r["image"], r["caption"], r["story"])
-        res.append({**r, **m})
-    
+def evaluate_run(rows, out_csv):
+    """rows: list of {image, caption, story}. Writes CSV, prints means and failure counts."""
+    res = [{**r, **score(r["image"], r["caption"], r["story"])} for r in rows]
     for r in res: r["attribute_conflict"] = " ".join(r["attribute_conflict"])
     with open(out_csv, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=list(res[0])); w.writeheader(); w.writerows(res)
-    
-    num = ["clip_image_story_mean", "clip_image_story_min", "nli_contra_mean", "nli_contra_max", 
-           "grounding_score", "repetition_rate", "entity_consistency", "transition_markers", 
-           "adjacent_similarity", "runtime_s"]
+    num = ["clip_image_story_mean", "clip_image_story_min", "nli_contra_mean", "nli_contra_max",
+           "grounding_score", "repetition_rate", "eval_total_s"]
     print("n =", len(res), {k: round(sum(r[k] for r in res) / len(res), 3) for k in num})
     print("fail: length", sum(not r["length_valid"] for r in res), "| attr_conflict", sum(bool(r["attribute_conflict"]) for r in res),
           "| grounding", sum(not r["grounding_pass"] for r in res))
     return res
 
 
-def aggregate_results(results: list) -> dict:
-    """Compute aggregate metrics across all results."""
-    if not results:
-        return {}
-    n = len(results)
-    def mean(key): return sum(r.get(key, 0) for r in results) / n
-    def pct(key): return sum(bool(r.get(key, 0)) for r in results) / n * 100
-    
-    return {
-        "num_images": n,
-        "mean_grounding_score": round(mean("grounding_score"), 3),
-        "mean_clip_similarity": round(mean("clip_image_story_mean"), 3),
-        "mean_nli_contradiction": round(mean("nli_contra_mean"), 3),
-        "mean_repetition_rate": round(mean("repetition_rate"), 4),
-        "mean_entity_consistency": round(mean("entity_consistency"), 3),
-        "mean_transition_markers": round(mean("transition_markers"), 1),
-        "mean_adjacent_similarity": round(mean("adjacent_similarity"), 3),
-        "pct_length_valid": round(pct("length_valid"), 1),
-        "pct_grounding_pass": round(pct("grounding_pass"), 1),
-        "mean_seeing_time": round(mean("see_s") if any("see_s" in r for r in results) else 0, 2),
-        "mean_story_time": round(mean("story_s") if any("story_s" in r for r in results) else 0, 2),
-        "mean_total_time": round(mean("see_s") + mean("story_s") if any("see_s" in r for r in results) else mean("runtime_s"), 2),
-    }
-
-
 if __name__ == "__main__":  # self-test with SYNTHETIC strings (test only)
-    img = os.path.join(os.path.dirname(os.path.abspath(__file__)), "selftest_image.jpg")  # ginger cat in a blue bag
+    here = os.path.dirname(os.path.abspath(__file__))
+    img = os.path.join(here, "selftest_image.jpg")  # ginger cat in a blue bag
     print("Image:", img, "| load_models s:", round(TIMINGS["load_models"][0], 2))
     cap = "a brown cat sitting inside a blue bag"
     good = ("The little brown cat curled up inside the blue bag and watched the room with wide amber eyes. "
@@ -293,19 +252,15 @@ if __name__ == "__main__":  # self-test with SYNTHETIC strings (test only)
            "Nobody knew that the treasure lay beneath the frozen lake, waiting for the brave sailor "
            "who dared to cross the stormy sea at night, alone and without any fear.")
     rows = [{"image": img, "caption": cap, "story": t} for t in (good, bad)]
-    for name, r in zip(("consistent", "contradicting"), evaluate_run(rows, os.path.join(os.path.dirname(__file__), "selftest.csv"))):
+    for name, r in zip(("consistent", "contradicting"), evaluate_run(rows, os.path.join(here, "selftest.csv"))):
         print(name, {k: (round(v, 3) if isinstance(v, float) else v) for k, v in r.items() if k not in ("image", "caption", "story")})
-    
-    # Test repetition
+
     print("\nRepetition test:")
-    rep_good = repetition_score(good)
-    rep_bad = repetition_score(bad)
-    print("good:", rep_good)
-    print("bad:", rep_bad)
-    
-    # Test continuity
-    print("\nContinuity test:")
-    ctx1 = {"characters": ["cat"], "objects": ["bag", "floor"], "region_descriptions": ["cat in bag"]}
-    ctx2 = {"characters": ["cat"], "objects": ["bag", "sun"], "region_descriptions": ["cat sleeping"]}
-    cont = continuity_score([ctx1, ctx2], good)
-    print("continuity:", cont)
+    print("good:", repetition_score(good))
+    print("bad:", repetition_score(bad))
+
+    print("\nContinuity test (synthetic frames; only entities in 2+ frames recur):")
+    frames = [{"characters": ["person"], "od_labels": ["car"]},
+              {"characters": ["person"], "od_labels": ["tree"]},
+              {"characters": [], "od_labels": ["dog"]}]
+    print(continuity_score(frames, "A person drove a car, then walked past a tree."))

@@ -23,7 +23,7 @@ def _load():
     if "model" in _STATE:
         return _STATE["model"], _STATE["proc"]
     from transformers import AutoProcessor
-    t0 = time.time()
+    t0 = time.perf_counter()
     try:
         from transformers import Florence2ForConditionalGeneration
         proc = AutoProcessor.from_pretrained(MODEL_ID)
@@ -43,7 +43,7 @@ def _load():
         LOAD_MODE = "remote_code (native failed: %s)" % str(e)[:120]
     model.eval()
     _STATE["model"], _STATE["proc"] = model, proc
-    LOAD_TIME_S = round(time.time() - t0, 2)
+    LOAD_TIME_S = round(time.perf_counter() - t0, 2)
     return model, proc
 
 
@@ -146,9 +146,9 @@ def _extract_entities_from_dense(labels):
 
 
 def describe(image_path):
-    t0 = time.time()
+    t0 = time.perf_counter()
     model, proc = _load()
-    t1 = time.time()
+    t1 = time.perf_counter()
     image = Image.open(image_path).convert("RGB")
     out = {}
     
@@ -235,6 +235,7 @@ def describe(image_path):
         "scene": scene,
         "description": detailed,
         "objects": all_objects,
+        "od_labels": labels,  # short object-detection labels only (used for entity matching across frames)
         "characters": dedup(all_character_types),
         "actions": dedup(all_action_verbs),
         "relationships": dedup(dense_entities["spatial_phrases"]),
@@ -242,7 +243,7 @@ def describe(image_path):
         "spatial_relations": dedup(dense_entities["spatial_phrases"]),
         "region_descriptions": dense_entities["region_descriptions"],
         "style_or_mood": style_mood,
-        "runtime_s": round(time.time() - t1, 2),
+        "runtime_s": round(time.perf_counter() - t1, 2),
         "model_load_s": round(t1 - t0, 2),
     }
 
