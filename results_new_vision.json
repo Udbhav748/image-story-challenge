@@ -1,0 +1,258 @@
+{
+  "thumb-chihiro001.png": {
+    "scene": "The image shows a young boy sitting in the back seat of a car",
+    "description": "The image shows a young boy sitting in the back seat of a car. He is wearing a green and red striped shirt, red shorts, and white sneakers. He has brown hair and is holding a pink flower in his hand. The car has a blue Adidas bag on the left side and a cardboard box on the right side. There are also some items scattered around the car, including a pink bunny and a blue bag with the word \"KINOKUKU\" written on it. The background shows a green lawn and trees. The boy appears to be relaxed and enjoying his time in the car.",
+    "objects": [
+      "footwear",
+      "human face",
+      "person"
+    ],
+    "characters": [
+      "girl",
+      "boy",
+      "human"
+    ],
+    "actions": [
+      "sitting",
+      "holding",
+      "wearing"
+    ],
+    "relationships": [],
+    "ocr_text": "",
+    "spatial_relations": [],
+    "style_or_mood": "",
+    "region_descriptions": [
+      "A young girl sitting on the back seat of a car with a bunch of flowers.",
+      "A young boy sitting on a couch with a bouquet of flowers in his hand.",
+      "footwear",
+      "human face",
+      "footwear"
+    ]
+  },
+  "thumb-chihiro002.png": {
+    "scene": "The image shows a young girl standing next to a large green monster statue in a forest",
+    "description": "The image shows a young girl standing next to a large green monster statue in a forest. The monster is standing on its hind legs with its mouth open and tongue sticking out, as if it is laughing. The girl is wearing a green and white striped shirt, red shorts, and yellow shoes. She has brown hair and is looking at the monster with a sad expression. Behind the monster, there is a black car parked on the side of the road. The trees and bushes surrounding the car are tall and green, and the ground is covered in fallen leaves.",
+    "objects": [
+      "car",
+      "footwear",
+      "human face",
+      "person"
+    ],
+    "characters": [
+      "monster",
+      "girl",
+      "person",
+      "human"
+    ],
+    "actions": [
+      "standing",
+      "looking",
+      "laughing",
+      "wearing"
+    ],
+    "relationships": [
+      "girl standing next to a car with a g"
+    ],
+    "ocr_text": "",
+    "spatial_relations": [
+      "girl standing next to a car with a g"
+    ],
+    "style_or_mood": "",
+    "region_descriptions": [
+      "A young girl standing next to a car with a green monster on the hood.",
+      "person",
+      "human face"
+    ]
+  },
+  "thumb-chihiro004.png": {
+    "scene": "The image shows a family of three - a man, a woman and a child - sitting at a table in a restaurant",
+    "description": "The image shows a family of three - a man, a woman and a child - sitting at a table in a restaurant. The man is on the right side of the image, wearing a blue shirt and holding a hot dog in his mouth. He is eating a meal with chopsticks. The woman is sitting on the left side, holding a red bowl and appears to be eating it. The child is standing in the background, looking at the man and the food. The table is covered with plates of food, including a large piece of meat, a plate of fries, and a small bowl of sauce. The restaurant has a wooden floor and a wooden wall with a shelf of pots and pans.",
+    "objects": [
+      "human face",
+      "man",
+      "woman"
+    ],
+    "characters": [
+      "man",
+      "dog",
+      "woman",
+      "person",
+      "human",
+      "child"
+    ],
+    "actions": [
+      "eating",
+      "looking",
+      "standing",
+      "sitting",
+      "holding",
+      "wearing"
+    ],
+    "relationships": [],
+    "ocr_text": "",
+    "spatial_relations": [],
+    "style_or_mood": "",
+    "region_descriptions": [
+      "man eating hot dog in restaurant",
+      "woman eating red fish in restaurant",
+      "person",
+      "human face",
+      "human face",
+      "human face"
+    ]
+  },
+  "thumb-chihiro005.png": {
+    "scene": "The image shows a young boy with green hair, wearing a blue shirt and a purple belt, standing on a balcony overlooking a",
+    "description": "The image shows a young boy with green hair, wearing a blue shirt and a purple belt, standing on a balcony overlooking a body of water. He is holding a small object in his hand and appears to be looking out at the horizon. The sky is dark and cloudy, and there are a few white birds flying in the air around him. The water is calm and there is a red railing in the foreground. The overall mood of the image is peaceful and serene.",
+    "objects": [
+      "human face",
+      "person"
+    ],
+    "characters": [
+      "man",
+      "human",
+      "boy"
+    ],
+    "actions": [
+      "standing",
+      "looking",
+      "holding",
+      "flying",
+      "wearing"
+    ],
+    "relationships": [],
+    "ocr_text": "",
+    "spatial_relations": [],
+    "style_or_mood": "peaceful",
+    "region_descriptions": [
+      "A young man with green hair and a blue shirt is standing on a red railing.",
+      "human face"
+    ]
+  },
+  "thumb-chihiro006.png": {
+    "scene": "The image is an illustration of a pig wearing a blue shirt",
+    "description": "The image is an illustration of a pig wearing a blue shirt. The pig is standing in a kitchen with a countertop and a window in the background. It has a big smile on its face and is holding a plate of food in its mouth. The food appears to be a variety of dishes, including meat, vegetables, and sauces. The colors are bright and vibrant, with shades of pink, orange, and yellow. The overall mood of the image is cheerful and playful.",
+    "objects": [
+      "pig"
+    ],
+    "characters": [
+      "pig"
+    ],
+    "actions": [
+      "standing",
+      "holding",
+      "wearing"
+    ],
+    "relationships": [],
+    "ocr_text": "",
+    "spatial_relations": [],
+    "style_or_mood": "bright",
+    "region_descriptions": [
+      "A cartoon pig with a blue shirt and a green leafy vegetable in its mouth."
+    ]
+  },
+  "thumb-chihiro007.png": {
+    "scene": "The image shows the entrance of a Chinese restaurant",
+    "description": "The image shows the entrance of a Chinese restaurant. The entrance is decorated with colorful stained glass windows on both sides. Above the entrance, there are red lanterns hanging from the ceiling. The lanterns are in the shape of Chinese characters and are lit up with red lantern lights. In front of the entrance is a counter with a blue and white checkered tablecloth and a bowl of food on it. There are four small wooden stools in front of it. The background is a wall with a mural of a bird and other objects. The overall atmosphere of the image is festive and lively.",
+    "objects": [
+      "bowl",
+      "chair",
+      "lantern",
+      "stool"
+    ],
+    "characters": [
+      "bird"
+    ],
+    "actions": [],
+    "relationships": [],
+    "ocr_text": "",
+    "spatial_relations": [],
+    "style_or_mood": "festive",
+    "region_descriptions": [
+      "chair",
+      "stool",
+      "stool",
+      "lantern",
+      "stool",
+      "lantern",
+      "lantern",
+      "lantern",
+      "bowl",
+      "lantern",
+      "bowl",
+      "bowl",
+      "bowl"
+    ]
+  },
+  "thumb-chihiro008.png": {
+    "scene": "The image is a screenshot from a video game",
+    "description": "The image is a screenshot from a video game. It shows a scene from a small town at night. The town is lit up with red lights and there are several buildings with arched windows and doors. The buildings are decorated with various patterns and designs. In the center of the image, there is a small figure of a person standing in front of a doorway with a sign that reads \"Welcome to the town\". The person is wearing a white shirt and blue jeans and is holding a sword in their right hand. On the right side of the screen, there are two other figures, one of which appears to be a woman with long dark hair and a red dress. The background is dark and the overall atmosphere is eerie and mysterious.",
+    "objects": [
+      "chair",
+      "person",
+      "window",
+      "A small red building with a green door and red lights."
+    ],
+    "characters": [
+      "person",
+      "figure",
+      "woman"
+    ],
+    "actions": [
+      "standing",
+      "holding",
+      "wearing"
+    ],
+    "relationships": [],
+    "ocr_text": "",
+    "spatial_relations": [],
+    "style_or_mood": "dark",
+    "region_descriptions": [
+      "A small red building with a green door and red lights.",
+      "person"
+    ]
+  },
+  "chihiro003.jpg": {
+    "scene": "The image is an illustration of a street scene in a European city",
+    "description": "The image is an illustration of a street scene in a European city. The street is lined with colorful buildings, including a green building with a star on the top left corner, a yellow building with arched windows, and a pink building with red lanterns hanging from the roof. There are also several shops and restaurants on the street, including one with a blue awning and another with a yellow awnings. In the center of the image, there is a man and two children walking on the sidewalk. The sky is blue and there are a few clouds in the background. The overall style of the illustration is whimsical and playful.",
+    "objects": [
+      "building",
+      "house",
+      "window",
+      "colorful buildings with Christmas decorations on street",
+      "colorful building with Christmas lanterns and decorations",
+      "colorfully painted buildings with red lanterns on street",
+      "colorful street scene with yellow building and red lantern",
+      "blue building with red tiled roof and balcony"
+    ],
+    "characters": [
+      "person",
+      "children",
+      "man"
+    ],
+    "actions": [
+      "walking"
+    ],
+    "relationships": [],
+    "ocr_text": "",
+    "spatial_relations": [],
+    "style_or_mood": "playful",
+    "region_descriptions": [
+      "colorful buildings with Christmas decorations on street",
+      "colorful building with Christmas lanterns and decorations",
+      "colorfully painted buildings with red lanterns on street",
+      "colorful street scene with yellow building and red lantern",
+      "blue building with red tiled roof and balcony",
+      "window",
+      "window",
+      "window",
+      "person",
+      "window",
+      "person",
+      "window",
+      "person",
+      "window",
+      "window"
+    ]
+  }
+}

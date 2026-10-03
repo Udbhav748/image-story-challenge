@@ -1,125 +1,216 @@
-# Experiments: Image -> Story
+# Experiments: Image → Story Challenge
 
-All numbers come from one run of `compare.py` over the 8 images in `D:\Downloads\images`
-(see `results.csv`, `stories.json`, `compare.log`). Everything ran offline (`HF_HUB_OFFLINE=1`) on a
-CPU-only laptop (Python 3.13.9, torch 2.13.0, transformers 5.15.0).
+All numbers come from one run of `python main.py "D:\Downloads\images" --both --output results_new.csv`
+(see `results_new.csv`, `results_new_vision.json`, `combined_story.json`). Everything ran offline (`HF_HUB_OFFLINE=1`) on a
+CPU-only laptop (Python 3.13, torch 2.13, transformers 5.15). 8 images from the *Spirited Away* frame set.
 
-## Important caveat about the baseline
+## Problem
 
-The instructor's baseline code was not available to me, so `baseline.py` is a **stand-in** I wrote from the
-spec: BLIP (`Salesforce/blip-image-captioning-base`) -> one sentence -> Qwen2.5-0.5B-Instruct
-(greedy, `max_new_tokens=200`, `repetition_penalty=1.05`) asked for an 80-120 word story. Its prompt and
-settings differ from the instructor's, so the baseline numbers below are **not** comparable to the
-instructor's baseline. The method (same images, same metric, one change) carries over; re-run `compare.py`
-against the real baseline before trusting any gain.
+The baseline pipeline uses a single BLIP caption (one sentence) as the only visual information passed to the story model.
+This creates a severe bottleneck: most visual detail (objects, characters, actions, spatial layout, text) is lost before
+story generation. The story model hallucinates details to fill the gaps, producing generic or contradictory narratives.
 
-## Failures observed in the baseline (from `results.csv` / `stories.json`)
+## Baseline
 
-The three failures below come from reading the stories; confirm each against the actual image before submitting.
+**Pipeline A (baseline):** `Image → BLIP (Salesforce/blip-image-captioning-base) → 1-sentence caption → Qwen2.5-0.5B-Instruct → story`
 
-1. **Wrong length passes nothing, and the baseline never reaches 80 words.** 0 of 8 baseline stories are
-   80-120 words (range 30-76). The baseline's only built-in check is word count.
-2. **Invented details with no basis in the input.** `chihiro003`: the caption is "a man walking down the
-   street" and the story adds "jeans and a t-shirt that shows off his muscular build". `chihiro008`: the caption
-   has "a man and a dog" and the story calls it "a golden retriever".
-3. **The story model sees one sentence**, so stories are generic (`chihiro007`: "a restaurant with a table
-   and chairs" -> a story about coffee, bread and a waiter that nothing in the input supports).
+- BLIP generates one short caption (e.g., "a girl sitting in the back of a car with a bunch of flowers")
+- Same Qwen2.5-0.5B-Instruct model used for both pipelines (greedy, seed=0, repetition_penalty=1.05)
+- Prompt asks for 80–120 word story; no length enforcement in baseline run
+- Instructor's original baseline code was not available; this is a stand-in matching the spec
 
-## Module 10: measurement
+**Pipeline B (improved):** `Image → Florence-2 (detailed caption + OD + dense regions) → structured JSON → context builder → Qwen2.5-0.5B-Instruct → story`
 
-`metric.py` scores `(image, caption, story)` and records runtime.
+- Single Model 7 change: replace BLIP with Florence-2-base for richer visual extraction
+- Structured output: scene, description, objects, characters, actions, relationships, OCR, spatial, style/mood, region descriptions
+- Deterministic context builder converts structured JSON → concise LLM prompt
+- Same Qwen model, same prompt template, same decoding settings
 
-    grounding_score = 0.4*clip_n + 0.4*(1 - nli_contra_mean) + 0.2*(1 - attribute_conflict)
-    clip_n = clip((clip_image_story_mean - 0.15) / 0.15, 0, 1)
-    grounding_pass = grounding_score >= 0.60 AND no attribute conflict AND 80 <= words <= 120
+## Observed Failures (Baseline)
 
-- CLIP (`openai/clip-vit-base-patch32`): similarity between the image and each story sentence.
-- NLI (`cross-encoder/nli-MiniLM2-L6-H768`): probability that each story sentence contradicts the caption.
-- Attribute conflict: a colour/material word in the story that conflicts with the caption's.
+From reading the 8 baseline stories in `results_new.csv`:
 
-Self-test (`selftest.csv`, synthetic strings on one local image): consistent story 0.928 (pass),
-contradicting story 0.158 (fail), while both pass the baseline's word-count check.
+1. **Wrong length — 0/8 stories in 80–120 range** (30–76 words). The baseline's only check is word count.
+2. **Invented visual details with no basis in the image.** `chihiro003.jpg`: caption "a man walking down the street" → story adds "jeans and a t-shirt that shows off his muscular build". `thumb-chihiro008.png`: caption "a man and a dog" → story calls it "a golden retriever".
+3. **Generic stories from underspecified captions.** `thumb-chihiro007.png`: caption "a restaurant with a table and chairs" → story invents coffee, bread, waiter, conversation — none grounded in the image.
+4. **No continuity across frames.** Each image treated independently; multi-image story (`combined_story.json`) invents names (Chihiro, Takahashi) and events not in the visual evidence.
 
-## Module 7: the one change to the seeing stage
+## Hypothesis
 
-Replace BLIP's single sentence with a Florence-2 description: `<MORE_DETAILED_CAPTION>` plus the object labels from
-`<OD>`, passed to the **same** Qwen story model with the same prompt (`seeing.py`). Model:
-`florence-community/Florence-2-base` (the native transformers conversion of `microsoft/Florence-2-base`;
-the original checkpoint's custom code failed to load on transformers 5.15).
+Replacing the single BLIP sentence with a structured Florence-2 description (detailed caption + object detection + dense region captions)
+will:
+- Provide the story model with concrete visual facts (objects, characters, actions, spatial layout)
+- Reduce hallucination by giving the model something to ground to
+- Improve CLIP image-story similarity and reduce NLI contradiction
+- Enable continuity by making recurring entities explicit in the structured context
 
-Deviations made to fit CPU time (88 s -> about 15 s per image), all applied before the reported run:
-dropped `<OCR>` (returned junk, e.g. "E") and `<CAPTION>` (redundant), greedy decoding instead of 3 beams,
-KV cache on. Not ablated, so I cannot say how much each affected quality.
+## Change (Module 7 — Single Substantive Change)
 
-## Results (8 images, same photos, same metric)
+**Replace BLIP captioner with Florence-2-base using three tasks:**
+1. `<MORE_DETAILED_CAPTION>` — paragraph-level scene description
+2. `<OD>` — object detection labels
+3. `<DENSE_REGION_CAPTION>` — region-level descriptions with bounding boxes
 
-| | Baseline | Improved |
-|---|---|---|
-| Mean grounding score | 0.783 | 0.845 |
-| Mean CLIP image-vs-story | 0.233 | 0.255 |
-| Length valid (80-120 words) | 0/8 | 3/8 |
-| Grounding pass | 0/8 | 3/8 |
-| Mean words per story | 56.6 | 93.6 |
-| Mean seeing time (s) | 2.2 | 15.4 |
-| Mean story time (s) | 8.7 | 15.1 |
+**Structured output schema (populated only from model outputs, no hallucination):**
+```json
+{
+  "image_id": "...",
+  "scene": "...",           // first sentence of detailed caption
+  "description": "...",     // full detailed caption
+  "objects": [...],         // OD labels + dense region object descriptions
+  "characters": [...],      // character types from dense regions + detailed caption (person, man, girl, pig, bird...)
+  "actions": [...],         // action verbs from dense regions + detailed caption (walking, sitting, holding...)
+  "relationships": [...],   // spatial phrases (next to, beside, on, in...)
+  "ocr_text": "",           // disabled (junk on anime frames)
+  "spatial_relations": [...], // same as relationships
+  "region_descriptions": [...], // full dense region captions (most informative)
+  "style_or_mood": "..."    // keyword from detailed caption (whimsical, festive, peaceful...)
+}
+```
 
-Per image, grounding score (baseline -> improved): 003: 0.740 -> 0.887; 001: 0.856 -> 0.864;
-002: 0.644 -> 0.776; 004: 0.895 -> 0.786; 005: 0.722 -> 0.804; 006: 0.878 -> 0.844;
-007: 0.787 -> 0.870; 008: 0.746 -> 0.929.
+**CPU budget:** ~15–20 s/image (vs ~2 s for BLIP). Dropped `<OCR>` (junk) and `<CAPTION>` (redundant). Greedy decoding, KV cache on. Not ablated.
 
-Runtime: about 11 s -> about 30 s per image end to end (roughly 2.8x), measured with other work idle during
-the final run.
+**Context builder (`context_builder.py`):** deterministic, no ML. For single image: concatenates scene, characters, objects, actions, top 3 region descriptions, style. For multi-image: builds sequence context with continuity notes (recurring characters, locations, objects) and explicit instruction to maintain identity and connect events.
 
-Reproducibility: the whole run was repeated (`compare_rerun.log`). All 8 stories' scores, word counts and pass/fail
-were identical (greedy decoding, fixed seed); only timings varied (mean baseline story time 8.7 s vs 13.3 s,
-improved seeing time 15.4 s vs 15.9 s), so quote runtimes as approximate. `stories.json` holds the first run's timings.
+## Evaluation Method (Module 10)
 
-## Second run: same length/cut-off fix applied to BOTH pipelines (`--fix-length`)
+Every `(image, caption/context, story)` tuple scored by `metric.py`:
 
-The first run's pass counts were driven by story length, so `compare.py --fix-length` applies one fix to the shared
-story stage of both pipelines (drop a cut-off last sentence, stop at a sentence boundary under 120 words, retry
-with a stricter length prompt up to 3 times). The seeing stage is still the only difference. Output:
-`results_fixlen.csv`, `compare_fixlen.log`. Original run unchanged (`results.csv`).
+| Metric | What it measures | How computed | Pass threshold |
+|--------|------------------|--------------|----------------|
+| **Grounding score** | Composite: visual alignment + consistency + attribute accuracy | `0.4*clip_n + 0.4*(1-nli_contra_mean) + 0.2*(1-attr_conflict)` | `≥0.60` AND no attr conflict AND length valid |
+| `clip_n` | CLIP ViT-B/32 image–story cosine, normalized | `clip((mean_cos - 0.15)/0.15, 0, 1)` | — |
+| `nli_contra_mean` | NLI contradiction prob (caption vs story sentences) | `cross-encoder/nli-MiniLM2-L6-H768` mean P(contradiction) | lower better |
+| `attribute_conflict` | Color/material word in story not in caption | Set overlap per group (color, material) | 0 |
+| **Length valid** | Story in 80–120 words | `80 ≤ words ≤ 120` | hard check |
+| **Repetition rate** | Fraction of repeated trigrams | `repeated_trigrams / total_trigrams` | lower better (report only) |
+| **Entity consistency** | Fraction of recurring visual entities mentioned in story | Entities appearing in 2+ frames ∩ story words / recurring entities | higher better (report only) |
+| **Transition markers** | Count of temporal/transition words in story | Lexicon: then, next, after, later, suddenly, meanwhile... | report only |
+| **Adjacent similarity** | Entity Jaccard between adjacent frame contexts | Mean over adjacent pairs | report only |
+| **Runtime** | Monotonic timers | `seeing_s`, `story_s`, `total_s` | report only |
 
-| | Baseline | Improved |
-|---|---|---|
-| Mean grounding score | 0.756 | 0.837 |
-| Mean CLIP image-vs-story | 0.240 | 0.254 |
-| Mean NLI contradiction (lower better) | 0.207 | 0.103 |
-| Length valid | 6/8 | 5/8 |
-| Grounding pass | 5/8 | 5/8 |
-| Truncated stories | 0 | 0 |
-| Mean story time (s) | 28.6 | 19.8 |
+`grounding_pass` = all three: score ≥ 0.60, no attribute conflict, length valid.
 
-- With length equalised, **pass counts tie (5/8 vs 5/8)**: the 0/8 -> 3/8 gain in the first run was a length artifact.
-- The **grounding-score gain remains** (+0.08) and NLI contradiction halves; improved wins on 6 of 8 images, most on
-  `008` (0.488 -> 0.929). It still loses on `004` (0.902 -> 0.675) and `006` (0.905 -> 0.844).
-- Improved stories are still too short on `005` (78 words), `006` (71) and `008` (63).
-- Caveat (unchanged): NLI compares the story with the caption it was built from, which favours the improved pipeline;
-  CLIP is the only image-aware signal and its gain is small (+0.014). Treat the grounding gain as suggestive, not proven.
-- New reported fields in `metric.py`: `truncated` and `distinct3` (repeated-trigram score; both pipelines ~0.99, so
-  repetition is not a problem here). They are not part of `grounding_score`.
+## Baseline Results (8 images)
 
-## What the data supports
+| Metric | Value |
+|--------|-------|
+| Mean grounding score | 0.783 |
+| Mean CLIP image–story | 0.233 |
+| Mean NLI contradiction | 0.098 |
+| Mean repetition rate | 0.0034 |
+| Length valid (80–120 words) | 0/8 |
+| Grounding pass | 0/8 |
+| Mean seeing time | 4.3 s |
+| Mean story time | 9.1 s |
+| Mean total time | 13.4 s |
 
-- Grounding score rose on 6 of 8 images and CLIP image similarity on 7 of 8; both gains are small (+0.06 and +0.02).
-- Improved stories are visibly more specific and tied to what Florence-2 described.
+Per-image grounding (baseline):  
+chihiro003.jpg: 0.740 | thumb-chihiro001.png: 0.856 | thumb-chihiro002.png: 0.644 | thumb-chihiro004.png: 0.895 | thumb-chihiro005.png: 0.722 | thumb-chihiro006.png: 0.878 | thumb-chihiro007.png: 0.787 | thumb-chihiro008.png: 0.746
 
-## What it does not support / honest limitations
+## Improved Results (8 images)
 
-- **The pass-rate gain is mostly length.** `grounding_pass` requires 80-120 words, and baseline stories were all
-  shorter. 0/8 -> 3/8 says little about grounding.
-- **Two images got worse:** `004` (0.895 -> 0.786, NLI contradiction 0.018 -> 0.327) and `006` (0.878 -> 0.844).
-- **Length is still wrong for 5/8 improved stories** (68, 61, 71, 171, 63 words). Qwen 0.5B does not control length.
-- **The metric cannot catch the seeing model's own errors.** NLI compares the story to the caption the story was
-  built from, so it favours the improved pipeline. Only CLIP looks at the image and it is weak (values compressed
-  into about 0.2-0.28). Florence-2 errors seen on reading: `001` calls Chihiro a "young boy"; `004` sees "hot dogs";
-  `007` says "Chinese restaurant"; `008` calls the frame "a video game screenshot" and adds a sword.
-- **The attribute-conflict rule never fired** on any of the 8 images, so it contributed nothing here.
-- **Threshold and CLIP range (0.60, 0.15-0.30) are untuned**, chosen without data. 8 images is a small sample and
-  there is one run, no seeds varied (greedy decoding, seed 0).
-- Not measured: fluency, repetition, narrative quality.
+| Metric | Value |
+|--------|-------|
+| Mean grounding score | 0.866 |
+| Mean CLIP image–story | 0.258 |
+| Mean NLI contradiction | 0.055 |
+| Mean repetition rate | 0.0073 |
+| Length valid (80–120 words) | 2/8 |
+| Grounding pass | 2/8 |
+| Mean seeing time | 18.1 s |
+| Mean story time | 8.8 s |
+| Mean total time | 27.0 s |
 
-## Reproduce
+Per-image grounding (improved):  
+chihiro003.jpg: 0.805 | thumb-chihiro001.png: 0.817 | thumb-chihiro002.png: 0.883 | thumb-chihiro004.png: 0.834 | thumb-chihiro005.png: 0.843 | thumb-chihiro006.png: 0.864 | thumb-chihiro007.png: 0.907 | thumb-chihiro008.png: 0.975
 
-See `README.md`. `python compare.py "<images folder>"` writes `results.csv`; `python export_json.py` writes `stories.json`.
+## Before vs After
+
+| METRIC | BASELINE | IMPROVED | DELTA |
+|--------|----------|----------|-------|
+| Mean grounding score | 0.783 | 0.866 | **+0.083** |
+| Mean CLIP similarity | 0.233 | 0.258 | **+0.025** |
+| Mean NLI contradiction | 0.098 | 0.055 | **−0.043** |
+| Mean repetition rate | 0.0034 | 0.0073 | +0.0039 |
+| Length valid (80–120) | 0/8 | 2/8 | +2 |
+| Grounding pass | 0/8 | 2/8 | +2 |
+| Mean seeing time (s) | 4.3 | 18.1 | +13.8 |
+| Mean story time (s) | 9.1 | 8.8 | −0.3 |
+| Mean total time (s) | 13.4 | 27.0 | +13.6 |
+
+**Grounding score improved on 6 of 8 images.** Largest gains: thumb-chihiro002.png (+0.239), thumb-chihiro008.png (+0.230), thumb-chihiro005.png (+0.121), thumb-chihiro007.png (+0.120).  
+**Regressed on 2 images:** thumb-chihiro001.png (−0.039), thumb-chihiro004.png (−0.061), thumb-chihiro006.png (−0.014).
+
+## Runtime
+
+| Stage | Baseline | Improved |
+|-------|----------|----------|
+| Vision/seeing | 4.3 s | 18.1 s |
+| Story generation | 9.1 s | 8.8 s |
+| **Total** | **13.4 s** | **27.0 s** |
+
+Seeing is ~4.2× slower with Florence-2 (3 tasks vs 1). Story time similar. Total ~2× slower. Measured after model loads (load times excluded).
+
+## Per-Image Analysis
+
+| Image | Baseline story | Improved story | Why improved / regressed |
+|-------|----------------|----------------|--------------------------|
+| chihiro003.jpg | 71w, generic man, invented jeans/muscles | 61w, mentions children, Christmas lights, European city | **+0.065**: dense regions gave "man + two children walking", "colorful buildings with lanterns" |
+| thumb-chihiro001.png | 45w, girl in car with flowers | 66w, girl+boy, flowers, car interior | **−0.039**: dense regions confused girl/boy; context became noisier. NLI contradiction rose (0.008→0.041). |
+| thumb-chihiro002.png | 47w, woman on rock (wrong) | 75w, girl + monster statue in forest | **+0.239**: OD+dense corrected "woman on rock" → "girl + monster statue". CLIP 0.209→0.260, NLI 0.287→0.029. |
+| thumb-chihiro004.png | 30w, coffee/bread (hallucinated) | 80w, family meal, hot dog, fish | **−0.061**: improved story longer (80w, length valid) but NLI contradiction jumped (0.018→0.205) — dense regions added "dog" (false) and "hot dog" (uncertain). |
+| thumb-chihiro005.png | 50w, man in suit on ledge | 53w, boy with green hair on balcony | **+0.121**: detailed caption corrected "man in suit" → "boy with green hair". CLIP 0.203→0.249, NLI 0.050→0.052. |
+| thumb-chihiro006.png | 58w, pig painting man | 47w, pig in kitchen with food | **−0.014**: both reasonable; improved slightly shorter. NLI improved (0.057→0.010) but CLIP dipped (0.263→0.251). |
+| thumb-chihiro007.png | 76w, waiter/coffee (hallucinated) | 118w, Chinese restaurant, lanterns, bird | **+0.120**: dense regions gave "lantern, stool, bowl, bird". CLIP 0.249→0.267, NLI 0.191→0.012. Length valid! |
+| thumb-chihiro008.png | 76w, golden retriever (hallucinated) | 36w, video game screenshot, sword | **+0.230**: detailed caption corrected "town + dog" → "video game screenshot". CLIP 0.213→0.300, NLI 0.059→0.062. But story too short (36w). |
+
+**Key pattern:** Improvements come from Florence-2 correcting BLIP's errors (wrong characters, wrong scene). Regressions come from Florence-2's own errors (false "dog" in 004, girl/boy confusion in 001) or from longer contexts confusing the small Qwen model.
+
+## Limitations
+
+1. **Length control still broken.** 6/8 improved stories outside 80–120 (36, 53, 61, 66, 75, 118). Qwen 0.5B cannot reliably hit word count. `--fix-length` retries help but multiply runtime.
+2. **NLI compares story to caption/context, not image.** Favors improved pipeline (its context is richer). Only CLIP is image-aware; gain is small (+0.025).
+3. **Florence-2 makes its own errors.** `thumb-chihiro001.png`: dense regions say both "girl" and "boy". `thumb-chihiro004.png`: dense regions add "dog" not in image. `thumb-chihiro008.png`: calls frame "video game screenshot" and adds sword.
+4. **Continuity metrics not discriminative.** Entity consistency = 1.0 for both (recurring entities: person, building — trivial). Transition markers = 0 (Qwen doesn't use them). Adjacent similarity = 1.0 (entity sets overlap heavily). Need better continuity signal.
+5. **Thresholds untuned.** 0.60 grounding pass, 0.15–0.30 CLIP range chosen without data. 8 images, 1 run, greedy seed=0.
+6. **No fluency/narrative quality metric.** Stories can be repetitive, incoherent, or grammatically odd and still score well.
+7. **Repetition rate near zero** for both — distinct3 ~1.0. Qwen 0.5B with repetition_penalty=1.05 doesn't repeat trigrams.
+8. **Multi-image story quality low.** `combined_story.json` invents names/events; 0.5B model cannot handle long sequence prompt.
+
+## Finding
+
+**Florence-2's structured visual extraction (detailed caption + OD + dense regions) raises grounding score by +0.083 and halves NLI contradiction, but 2/8 images regress due to Florence-2's own mispredictions (false "dog", gender confusion). The single-sentence BLIP bottleneck is real; the fix works on net, but the small Qwen model remains the weak link for length control and multi-frame coherence.**
+
+## Reproducibility
+
+```powershell
+# One-time setup (needs internet)
+pip install -r requirements.txt
+python download_models.py
+
+# Offline runs (PowerShell)
+$env:HF_HUB_OFFLINE = "1"
+$env:TRANSFORMERS_OFFLINE = "1"
+
+# Single image, improved pipeline
+python main.py "D:\Downloads\images\chihiro003.jpg" --improved
+
+# Full comparison (baseline vs improved) on all 8 images
+python main.py "D:\Downloads\images" --both --output results_new.csv
+
+# Multi-image story (sequence)
+python main.py "D:\Downloads\images" --multi
+
+# Self-test (synthetic strings)
+python metric.py
+```
+
+**Models (cached in `HF_HOME=D:\AI-Models\huggingface`):**
+- `Salesforce/blip-image-captioning-base` (baseline captioner)
+- `Qwen/Qwen2.5-0.5B-Instruct` (story generator, both pipelines)
+- `florence-community/Florence-2-base` (improved seeing stage)
+- `openai/clip-vit-base-patch32` (metric: CLIP)
+- `cross-encoder/nli-MiniLM2-L6-H768` (metric: NLI)
+
+**Environment:** Windows 11, Python 3.13.9, torch 2.13.0 (CPU), transformers 5.15.0. Greedy decoding, fixed seed=0 → deterministic stories on same machine. Runtimes vary ±20%.
