@@ -208,7 +208,7 @@ Evaluation is a first-class part of the pipeline. Every `(image, context, story)
 |--------|------------------|-----------|----------------|
 | **Grounding Score** | Composite: visual alignment + consistency + attribute accuracy | Higher | `0.4*clip_n + 0.4*(1-nli_contra_mean) + 0.2*(1-attr_conflict)` |
 | **CLIP Similarity** | Image-story semantic similarity (ViT-B/32 cosine) | Higher | `clip((mean_cos - 0.15)/0.15, 0, 1)` |
-| **NLI Contradiction** | Contradiction between context and story sentences | Lower | `cross-encoder/nli-MiniLM2-L6-H768` mean P(contradiction) |
+| **NLI Contradiction** | Contradiction between **generated context** and story sentences | Lower | `cross-encoder/nli-MiniLM2-L6-H768` mean P(contradiction) |
 | **Attribute Conflict** | Color/material words in story not present in context | Lower | Set difference per group (color, material) |
 | **Repetition Rate** | Fraction of repeated trigrams in story | Lower | `repeated_trigrams / total_trigrams` |
 | **Entity Consistency** | Fraction of recurring visual entities mentioned in story | Higher | `(recurring ∩ story_words) / recurring` |
@@ -219,7 +219,7 @@ Evaluation is a first-class part of the pipeline. Every `(image, context, story)
 
 **`grounding_pass`** = `grounding_score ≥ 0.60` AND no attribute conflict AND `length_valid`.
 
-> These are automatic proxies -- not perfect human-quality measures. They indicate trends and regressions.
+> **Important:** NLI evaluates contradiction between the **story and the generated context/caption** — it measures *consistency with the extracted visual context*, not independent image verification. Only CLIP directly compares image to story. These are automatic proxies — not perfect human-quality measures.
 
 ---
 
@@ -227,8 +227,10 @@ Evaluation is a first-class part of the pipeline. Every `(image, context, story)
 
 **8-image offline comparison** -- same images, same metric, same Qwen story model.
 
+### Normal Mode (no length control)
+
 | Metric | Baseline (BLIP) | Improved (Florence-2) | Delta |
-|--------|-----------------|----------------------|---|
+|--------|-----------------|----------------------|-------|
 | Mean Grounding Score | 0.783 | **0.866** | **+0.083** |
 | Mean CLIP Similarity | 0.233 | **0.258** | **+0.025** |
 | Mean NLI Contradiction | 0.098 | **0.055** | **-0.043** |
@@ -241,32 +243,52 @@ Evaluation is a first-class part of the pipeline. Every `(image, context, story)
 
 *Source: `results_new.csv` -- 8 images × 2 variants, run offline with `HF_HUB_OFFLINE=1`.*
 
+### Length-Equalised Mode (`--fix-length`)
+
+With `--fix-length`, both pipelines retry generation up to 3 times with stricter length prompts until the story falls in 80–120 words (or return the best attempt). This controls the length confound.
+
+| Metric | Baseline (BLIP) | Improved (Florence-2) | Delta |
+|--------|-----------------|----------------------|-------|
+| Mean Grounding Score | 0.756 | **0.789** | **+0.033** |
+| Mean CLIP Similarity | 0.240 | **0.253** | **+0.013** |
+| Mean NLI Contradiction | 0.207 | **0.088** | **−0.119** |
+| Mean Repetition Rate | 0.0068 | 0.0118 | +0.0050 |
+| Length Valid (80-120 words) | 6/8 | 6/8 | 0 |
+| Grounding Pass | **5/8** | 4/8 | −1 |
+| Mean Seeing Time | 2.4 s | 17.4 s | +15.0 s |
+| Mean Story Time | 27.0 s | 24.5 s | -2.5 s |
+| Mean Total Time | 29.4 s | 41.9 s | +12.5 s |
+
+*Source: `results_fixlen_new.csv` -- same 8 images, length-equalised, offline.*
+
+**Key insight:** With length equalised, the grounding gain shrinks from +0.083 to +0.033, and baseline wins on grounding pass (5/8 vs 4/8) because both produce 6 valid-length stories but baseline scores higher on the ones that pass. The large normal-mode pass gain (+2 passes) was largely a length artifact. NLI contradiction is substantially reduced (−0.119) with the improved pipeline.
+
 ---
 
 ## Per-Image Evidence
 
-| Image | Baseline | Improved | Delta |
-|-------|----------|----------|---|
-| chihiro003.jpg | 0.740 | 0.805 | **+0.065** |
-| thumb-chihiro001.png | 0.856 | 0.817 | **-0.039** |
-| thumb-chihiro002.png | 0.644 | 0.883 | **+0.239** |
-| thumb-chihiro004.png | 0.895 | 0.834 | **-0.061** |
-| thumb-chihiro005.png | 0.722 | 0.843 | **+0.121** |
-| thumb-chihiro006.png | 0.878 | 0.864 | **-0.014** |
-| thumb-chihiro007.png | 0.787 | 0.907 | **+0.120** |
-| thumb-chihiro008.png | 0.746 | 0.975 | **+0.230** |
+| Image | Normal Δ | Fixlen Δ | Normal Assessment | Fixlen Assessment |
+|-------|----------|----------|-------------------|-------------------|
+| chihiro003.jpg | +0.065 | −0.193 | Improved: dense regions gave "man + two children walking", "colorful buildings with lanterns" | **Regressed**: longer context confused Qwen; story less coherent |
+| thumb-chihiro001.png | −0.039 | −0.027 | Regressed: dense regions confused girl/boy; context noisier | Regressed: gender confusion in dense regions |
+| thumb-chihiro002.png | +0.239 | +0.179 | **Improved**: OD+dense corrected "woman on rock" → "girl + monster statue" | **Improved**: correction persists |
+| thumb-chihiro004.png | −0.061 | −0.044 | Regressed: dense regions added false "dog" and "hot dog" | Regressed: false "dog" detection persists |
+| thumb-chihiro005.png | +0.121 | +0.113 | **Improved**: detailed caption corrected "man in suit" → "boy with green hair" | **Improved**: correction persists |
+| thumb-chihiro006.png | −0.014 | −0.035 | Slight regress: both reasonable | Slight regress |
+| thumb-chihiro007.png | +0.120 | +0.133 | **Improved**: dense regions gave "lantern, stool, bowl, bird" | **Improved**: consistent gain |
+| thumb-chihiro008.png | +0.230 | +0.133 | **Improved**: detailed caption corrected "town + dog" → "video game screenshot" | **Improved**: gain persists but smaller |
 
-**Improvements (6/8):** Largest gains on 002 (+0.239), 008 (+0.230), 005 (+0.121), 007 (+0.120).
+**Normal mode:** Improvements on 6/8 images. Largest gains on 002 (+0.239), 008 (+0.230), 005 (+0.121), 007 (+0.120). Regressions on 2/8 images: 001 (−0.039), 004 (−0.061), 006 (−0.014).
 
-**Regressions (2/8):** 001 (-0.039), 004 (-0.061), 006 (-0.014). These are preserved, not hidden.
+**Fixlen mode:** Improvements on 4/8 images (002, 005, 007, 008). Regressions on 4/8 images: 001, 003, 004, 006. The grounding gain is real but smaller (+0.033 vs +0.083). Baseline wins on pass rate (5/8 vs 4/8) when length is controlled.
 
 ---
 
 ## Key Finding
 
-> **Florence-2's richer structured visual extraction improved grounding overall (+0.083), but 3/8 images regressed because the vision model itself introduced incorrect detections (false "dog", gender confusion, "video game screenshot" + sword). The richer context helps only when the additional visual information is reliable.**
+> **Florence-2's structured visual extraction (detailed caption + OD + dense regions) raises grounding score by +0.083 normally and +0.033 when length is equalised, while substantially reducing NLI contradiction (−0.043 normal, −0.119 fixlen). However, 3–4 of 8 images regress due to Florence-2's own mispredictions (false "dog", gender confusion) and the small Qwen model's difficulty integrating longer contexts under length constraints. The single-sentence BLIP bottleneck is real; the fix works on net but is not universal, and the small Qwen model remains the weak link for length control and context integration.**
 
-**Runtime tradeoff:** Seeing cost increases ~4× (4.3 s -> 18.1 s/image). Story generation remains similar (~9 s). Total pipeline ~2× slower.
+**Runtime tradeoff:** Seeing cost increases ~4–7× (4.3 s → 18.1 s/image normal; 2.4 s → 17.4 s fixlen). Story generation remains similar in normal mode (~9 s); fixlen multiplies story time ~3× due to retries. Total pipeline ~2× slower normal, ~1.4× slower fixlen.
 
 ---
 
@@ -277,9 +299,48 @@ Evaluation is a first-class part of the pipeline. Every `(image, context, story)
 | **Gender confusion** | thumb-chihiro001.png | Dense regions output both "girl" and "boy" for same figure |
 | **False object detection** | thumb-chihiro004.png | Dense regions add "dog" not present in image |
 | **Incorrect scene interpretation** | thumb-chihiro008.png | Detailed caption calls frame "video game screenshot" and adds sword |
-| **Length control failure** | 6/8 improved stories | Qwen 0.5B cannot reliably hit 80-120 words (range: 36-118) |
+| **Length control failure** | 6/8 improved stories | Qwen 0.5B cannot reliably hit 80-120 words (range: 36-118 normal; 75-120 fixlen) |
 | **Weak sequence coherence** | Multi-image story | 0.5B model cannot maintain long-range narrative continuity |
 | **Increased vision latency** | All improved runs | 3 Florence-2 tasks vs 1 BLIP call |
+| **Context confusion (fixlen)** | chihiro003.jpg fixlen | Longer structured context confused small Qwen model |
+
+### Concrete Baseline Failures (Evidence)
+
+**FAILURE 1: Hallucinated Attribute (chihiro003.jpg)**
+- **Baseline caption:** "a painting of a street scene with a man walking down the street"
+- **Baseline story claim:** "He's dressed in a casual yet stylish outfit, a pair of jeans and a t-shirt that shows off his muscular build"
+- **Observed issue:** The caption mentions only "a man" — no jeans, no t-shirt, no muscular build. The story invents specific clothing and physique.
+- **Metric signal:** Grounding 0.740, CLIP 0.219 (low), NLI 0.111 (moderate). Partially caught by low CLIP and elevated NLI.
+
+**FAILURE 2: Hallucinated Object Class (thumb-chihiro008.png)**
+- **Baseline caption:** "a scene of a town with a man and a dog"
+- **Baseline story claim:** "The dog, a golden retriever, wagged its tail in greeting"
+- **Observed issue:** The caption says "a dog" — the story invents the specific breed "golden retriever". The image shows a video game scene with a figure holding a sword; no dog is clearly visible.
+- **Metric signal:** Grounding 0.746, CLIP 0.213 (low), NLI 0.059. Weakly caught by low CLIP.
+
+**FAILURE 3: Generic Hallucination from Underspecified Caption (thumb-chihiro007.png)**
+- **Baseline caption:** "a restaurant with a table and chairs"
+- **Baseline story claims:** coffee, bread, waiter, conversation, cozy atmosphere
+- **Observed issue:** The caption gives only "restaurant + table + chairs". The story invents an entire dining scene with no visual basis.
+- **Metric signal:** Grounding 0.787, CLIP 0.249, NLI 0.191 (high contradiction). Partially caught by high NLI contradiction.
+
+### Regression Analysis (Images Where Improved < Baseline)
+
+| Image | Cause | Evidence |
+|-------|-------|----------|
+| thumb-chihiro001.png | Gender confusion in dense regions | Dense regions: "girl sitting..." AND "boy sitting..." |
+| thumb-chihiro004.png | False "dog" detection | Dense regions add "dog"; characters list includes "dog" |
+| thumb-chihiro006.png | Both reasonable; improved slightly shorter | Baseline: pig painting; Improved: pig in kitchen |
+| chihiro003.jpg (fixlen) | Longer context confused small Qwen | Fixlen: baseline 0.800 → improved 0.607 |
+
+### Improvement Analysis (Strongest Gains)
+
+| Image | Normal Δ | Fixlen Δ | Reason |
+|-------|----------|----------|--------|
+| thumb-chihiro002.png | +0.239 | +0.179 | Corrected "woman on rock" → "girl + monster statue" |
+| thumb-chihiro008.png | +0.230 | +0.133 | Corrected "town + dog" → "video game screenshot" |
+| thumb-chihiro007.png | +0.120 | +0.133 | Dense regions gave "lantern, stool, bowl, bird" |
+| thumb-chihiro005.png | +0.121 | +0.113 | Corrected "man in suit on ledge" → "boy on balcony" |
 
 **A richer context is only useful if the underlying vision information is accurate.**
 
@@ -454,7 +515,7 @@ $env:HF_HUB_OFFLINE = "1"
 $env:TRANSFORMERS_OFFLINE = "1"
 
 # Run pipeline
-python main.py "D:\Downloads\images" --both --output results.csv
+python main.py images/ --both --output results.csv
 ```
 
 ---
@@ -510,22 +571,22 @@ export TRANSFORMERS_OFFLINE=1
 
 **Full comparison (baseline vs improved):**
 ```powershell
-python main.py "D:\Downloads\images" --both --output results.csv
+python main.py images/ --both --output results.csv
+```
+
+**Length-equalised comparison:**
+```powershell
+python main.py images/ --both --fix-length --output results_fixlen.csv
 ```
 
 **Improved pipeline only:**
 ```powershell
-python main.py "D:\Downloads\images" --improved
+python main.py images/ --improved
 ```
 
 **Multi-image continuous story:**
 ```powershell
-python main.py "D:\Downloads\images" --multi
-```
-
-**With length enforcement (slower):**
-```powershell
-python main.py "D:\Downloads\images" --both --fix-length --output results_fixlen.csv
+python main.py images/ --multi
 ```
 
 ---
@@ -574,17 +635,42 @@ python test_pipeline.py
 * **Python 3.13**, `torch 2.13.0`, `transformers 5.15.0`, CPU-only
 * **Offline verification** -- `HF_HUB_OFFLINE=1` works end-to-end after download
 
+### Commands
+
+```powershell
+# One-time setup (needs internet)
+pip install -r requirements.txt
+python download_models.py
+
+# Offline runs (PowerShell)
+$env:HF_HUB_OFFLINE = "1"
+$env:TRANSFORMERS_OFFLINE = "1"
+
+# Full comparison (baseline vs improved) on all 8 images
+python main.py images/ --both --output results_new.csv
+
+# Length-equalised comparison
+python main.py images/ --both --fix-length --output results_fixlen_new.csv
+
+# Multi-image story (sequence)
+python main.py images/ --multi
+
+# Self-test (synthetic strings)
+python metric.py
+python test_pipeline.py
+```
+
 ---
 
 ## Performance
 
-| Stage | Baseline | Improved |
-|-------|----------|----------|
-| Vision (per image) | 4.3 s | 18.1 s |
-| Story generation | 9.1 s | 8.8 s |
-| **Total (per image)** | **13.4 s** | **27.0 s** |
+| Stage | Baseline (normal) | Improved (normal) | Baseline (fixlen) | Improved (fixlen) |
+|-------|-------------------|-------------------|-------------------|-------------------|
+| Vision (per image) | 4.3 s | 18.1 s | 2.4 s | 17.4 s |
+| Story generation | 9.1 s | 8.8 s | 27.0 s | 24.5 s |
+| **Total (per image)** | **13.4 s** | **27.0 s** | **29.4 s** | **41.9 s** |
 
-*Measured after model load, on CPU, Windows 11. Florence-2 runs 3 tasks (detailed caption + OD + dense regions) vs BLIP's 1 task.*
+*Measured after model load, on CPU, Windows 11. Florence-2 runs 3 tasks (detailed caption + OD + dense regions) vs BLIP's 1 task. Fixlen multiplies story time ~3× due to retries.*
 
 ---
 
