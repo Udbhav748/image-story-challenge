@@ -75,11 +75,12 @@ def run_improved(image_path, fix_length=False):
         return {"image": str(image_path), "error": f"improved failed: {e}"}
 
 
-def run_multi_image_story(image_paths, fix_length=False):
+def run_multi_image_story(image_paths):
     """One story across all images (filename order) plus the multi-image continuity proxy.
 
-    Frames whose vision stage fails are skipped and reported in `frames_failed`.
-    With fix_length=True the only change is that a cut-off final sentence is removed.
+    Frames whose vision stage fails are skipped and reported in `frames_failed`. A final sentence cut off by the
+    token limit is removed (`cut_off_tail_removed` says whether that happened). The --fix-length retry mechanism
+    does not apply to this mode.
     """
     try:
         descs, failed, total_see_s = [], [], 0.0
@@ -106,9 +107,8 @@ def run_multi_image_story(image_paths, fix_length=False):
         torch.manual_seed(baseline.SEED)
         with torch.no_grad():
             out = model.generate(**inputs, max_new_tokens=MULTI_MAX_NEW_TOKENS, do_sample=False, repetition_penalty=1.05)
-        story = tok.decode(out[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True).strip()
-        if fix_length:
-            story = baseline._fit_length(story, hi=10 ** 6)  # keep every complete sentence, drop a cut-off tail
+        raw_story = tok.decode(out[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True).strip()
+        story = baseline._fit_length(raw_story, hi=10 ** 6)  # keep every complete sentence, drop a cut-off tail
         story_s = time.perf_counter() - t1
 
         return {
@@ -116,6 +116,7 @@ def run_multi_image_story(image_paths, fix_length=False):
             "frames_failed": failed,
             "target_words": MULTI_TARGET_WORDS,
             "story": story,
+            "cut_off_tail_removed": story != raw_story,
             "word_count": len(story.split()),
             "see_s": round(total_see_s, 2),
             "story_s": round(story_s, 2),
@@ -241,7 +242,7 @@ def build_parser():
     parser.add_argument("--multi", action="store_true", help="Generate one story across all images (filename order)")
     parser.add_argument("--fix-length", action="store_true",
                         help="Length-controlled generation: up to 3 attempts with stricter length prompts, trimmed to whole "
-                             "sentences; returns the first 80-120 word story or else the closest attempt (--multi: only drops a cut-off last sentence)")
+                             "sentences; returns the first 80-120 word story or else the closest attempt (not used by --multi)")
     parser.add_argument("--output", default="results.csv", help="Output CSV file (--both)")
     parser.add_argument("--vision-json", default="vision.json", help="Output vision JSON file (--both)")
     parser.add_argument("--multi-output", default="combined_story.json", help="Output JSON file (--multi)")
@@ -263,7 +264,7 @@ def main():
     print(f"HF_HUB_OFFLINE={os.environ.get('HF_HUB_OFFLINE')}")
 
     if args.multi:
-        result = run_multi_image_story(images, args.fix_length)
+        result = run_multi_image_story(images)
         if "error" in result:
             print(f"Error: {result['error']}")
             return

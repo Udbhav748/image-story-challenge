@@ -1,24 +1,101 @@
 {
   "images": [
+    "chihiro003.jpg",
     "thumb-chihiro001.png",
     "thumb-chihiro002.png",
     "thumb-chihiro004.png",
     "thumb-chihiro005.png",
     "thumb-chihiro006.png",
     "thumb-chihiro007.png",
-    "thumb-chihiro008.png",
-    "chihiro003.jpg"
+    "thumb-chihiro008.png"
   ],
-  "story": "---\n\n### The Girl's Journey\n\nIn the heart of the bustling city, where the neon lights flickered and the chatter of people filled the air, there was a young girl named Chihiro. She was a shy and curious girl who loved nothing more than exploring the world around her. One day, as she sat in the back seat of a car, she noticed a group of people gathered near the entrance of a local park. The park was a place where she had always dreamed of spending her days, but it seemed like a distant memory now.\n\nAs she watched, a young boy named Takahashi approached her, his eyes sparkling with excitement. He was wearing a pair of blue jeans and a white t-shirt, and his face was filled with a mix of joy and mischief. He had a basket in his hands, and he was holding a bouquet of flowers in his hand. Chihiro couldn't help but smile as she watched him interact with the other children.\n\nThe park was a place of wonder and adventure, and Chihiro found herself drawn to the children. She watched them play, laugh, and explore, feeling a sense of connection to the world around her. As the sun began to set, casting a warm glow over the park, Chihiro felt a sense of peace wash over her. She knew that she would return to this place again and again, to see the same children and the same joy in their eyes.\n\n---\n\n### The Boy's Adventure\n\nChihiro's journey continued when she spotted a young boy named Takahashi standing next to a large green monster statue in a forest. The boy was dressed in a simple yet stylish outfit, complete with a pair of blue jeans and a white t-shirt. His face was a mix of curiosity and mischief, and he was holding a bouquet of flowers in his hand. Chihiro couldn't help but smile as she watched him interact with the other children.\n\nThe forest was a place of tranquility and beauty, and Chihiro found herself",
-  "word_count": 343,
-  "see_s": 134.57,
-  "story_s": 50.21,
+  "frames_failed": [],
+  "target_words": 250,
+  "story": "In the heart of a bustling European city, where the streets were lined with towering buildings adorned with Christmas decorations, there lived a young boy named Leo. His eyes sparkled with joy as he sat in the back seat of a car, surrounded by the vibrant colors of the holiday season. The car was a classic red, with a green monster statue on the hood, adding a touch of whimsy to the otherwise ordinary scene. Leo's mother, a kind-hearted woman with a penchant for cooking, had prepared a delicious meal for them. As they sat together, enjoying the warmth of the fire crackling in the fireplace, Leo's father, a stern but loving figure, stood nearby, watching over them with a mix of concern and amusement. The day was filled with laughter and joy, as the family gathered around the table, savoring every bite of their meal. The man, a tall, muscular man with a beard, sat at the head of the table, his eyes twinkling with mischief. He held a green leafy vegetable in his mouth, a symbol of good luck and prosperity. The woman, a delicate woman with a gentle demeanor, sat beside her husband, her hands clasped together in a gesture of peace. She held a red railing, a symbol of hope and stability, and looked up at the sky, a serene expression on her face. As the evening wore on, the children played games and laughed together, their spirits lifted by the festive atmosphere. The man, with his green shirt and red lights, stood outside the restaurant, watching the people pass by with a smile on his face. The woman, with her curly hair and a warm smile, walked into the restaurant, her eyes sparkling with excitement. She ordered a hot dog, her face lit up with joy as she ate it, her hands still holding the red railing. The man, with his green shirt and a green leafy vegetable, stood at the entrance, his eyes fixed on the door.",
+  "cut_off_tail_removed": true,
+  "word_count": 333,
+  "see_s": 136.78,
+  "story_s": 50.06,
+  "continuity": {
+    "num_frames": 8,
+    "recurring_entities": [
+      "boy",
+      "chair",
+      "child",
+      "footwear",
+      "girl",
+      "human",
+      "human face",
+      "man",
+      "person",
+      "window",
+      "woman"
+    ],
+    "recurring_count": 11,
+    "entity_consistency": 0.4545,
+    "transition_markers": 0,
+    "adjacent_similarity": 0.2285
+  },
   "vision_json": {
+    "chihiro003.jpg": {
+      "image_id": "chihiro003.jpg",
+      "scene": "The image is an illustration of a street scene in a European city",
+      "description": "The image is an illustration of a street scene in a European city. The street is lined with colorful buildings, including a green building with a star on the top left corner, a yellow building with arched windows, and a pink building with red lanterns hanging from the roof. There are also several shops and restaurants on the street, including one with a blue awning and another with a yellow awnings. In the center of the image, there is a man and two children walking on the sidewalk. The sky is blue and there are a few clouds in the background. The overall style of the illustration is whimsical and playful.",
+      "objects": [
+        "building",
+        "house",
+        "window",
+        "colorful buildings with Christmas decorations on street",
+        "colorful building with Christmas lanterns and decorations",
+        "colorfully painted buildings with red lanterns on street",
+        "colorful street scene with yellow building and red lantern",
+        "blue building with red tiled roof and balcony"
+      ],
+      "od_labels": [
+        "building",
+        "house",
+        "window"
+      ],
+      "characters": [
+        "person",
+        "man",
+        "children"
+      ],
+      "actions": [
+        "walking"
+      ],
+      "relationships": [],
+      "ocr_text": "",
+      "spatial_relations": [],
+      "region_descriptions": [
+        "colorful buildings with Christmas decorations on street",
+        "colorful building with Christmas lanterns and decorations",
+        "colorfully painted buildings with red lanterns on street",
+        "colorful street scene with yellow building and red lantern",
+        "blue building with red tiled roof and balcony",
+        "window",
+        "window",
+        "window",
+        "person",
+        "window",
+        "person",
+        "window",
+        "person",
+        "window",
+        "window"
+      ],
+      "style_or_mood": "playful"
+    },
     "thumb-chihiro001.png": {
       "image_id": "thumb-chihiro001.png",
       "scene": "The image shows a young boy sitting in the back seat of a car",
       "description": "The image shows a young boy sitting in the back seat of a car. He is wearing a green and red striped shirt, red shorts, and white sneakers. He has brown hair and is holding a pink flower in his hand. The car has a blue Adidas bag on the left side and a cardboard box on the right side. There are also some items scattered around the car, including a pink bunny and a blue bag with the word \"KINOKUKU\" written on it. The background shows a green lawn and trees. The boy appears to be relaxed and enjoying his time in the car.",
       "objects": [
+        "footwear",
+        "human face",
+        "person"
+      ],
+      "od_labels": [
         "footwear",
         "human face",
         "person"
@@ -55,6 +132,12 @@
         "human face",
         "person"
       ],
+      "od_labels": [
+        "car",
+        "footwear",
+        "human face",
+        "person"
+      ],
       "characters": [
         "girl",
         "monster",
@@ -63,9 +146,9 @@
       ],
       "actions": [
         "standing",
+        "laughing",
         "wearing",
-        "looking",
-        "laughing"
+        "looking"
       ],
       "relationships": [
         "girl standing next to a car with a g"
@@ -90,6 +173,11 @@
         "man",
         "woman"
       ],
+      "od_labels": [
+        "human face",
+        "man",
+        "woman"
+      ],
       "characters": [
         "man",
         "dog",
@@ -100,11 +188,11 @@
       ],
       "actions": [
         "eating",
+        "standing",
         "holding",
-        "sitting",
         "wearing",
-        "looking",
-        "standing"
+        "sitting",
+        "looking"
       ],
       "relationships": [],
       "ocr_text": "",
@@ -127,6 +215,10 @@
         "human face",
         "person"
       ],
+      "od_labels": [
+        "human face",
+        "person"
+      ],
       "characters": [
         "man",
         "human",
@@ -134,10 +226,10 @@
       ],
       "actions": [
         "standing",
+        "flying",
         "holding",
         "wearing",
-        "looking",
-        "flying"
+        "looking"
       ],
       "relationships": [],
       "ocr_text": "",
@@ -146,7 +238,7 @@
         "A young man with green hair and a blue shirt is standing on a red railing.",
         "human face"
       ],
-      "style_or_mood": "dark"
+      "style_or_mood": "peaceful"
     },
     "thumb-chihiro006.png": {
       "image_id": "thumb-chihiro006.png",
@@ -155,13 +247,16 @@
       "objects": [
         "pig"
       ],
+      "od_labels": [
+        "pig"
+      ],
       "characters": [
         "pig"
       ],
       "actions": [
+        "standing",
         "holding",
-        "wearing",
-        "standing"
+        "wearing"
       ],
       "relationships": [],
       "ocr_text": "",
@@ -169,13 +264,19 @@
       "region_descriptions": [
         "A cartoon pig with a blue shirt and a green leafy vegetable in its mouth."
       ],
-      "style_or_mood": "illustration"
+      "style_or_mood": "cheerful"
     },
     "thumb-chihiro007.png": {
       "image_id": "thumb-chihiro007.png",
       "scene": "The image shows the entrance of a Chinese restaurant",
       "description": "The image shows the entrance of a Chinese restaurant. The entrance is decorated with colorful stained glass windows on both sides. Above the entrance, there are red lanterns hanging from the ceiling. The lanterns are in the shape of Chinese characters and are lit up with red lantern lights. In front of the entrance is a counter with a blue and white checkered tablecloth and a bowl of food on it. There are four small wooden stools in front of it. The background is a wall with a mural of a bird and other objects. The overall atmosphere of the image is festive and lively.",
       "objects": [
+        "bowl",
+        "chair",
+        "lantern",
+        "stool"
+      ],
+      "od_labels": [
         "bowl",
         "chair",
         "lantern",
@@ -215,15 +316,20 @@
         "window",
         "A small red building with a green door and red lights."
       ],
+      "od_labels": [
+        "chair",
+        "person",
+        "window"
+      ],
       "characters": [
         "person",
         "figure",
         "woman"
       ],
       "actions": [
+        "standing",
         "holding",
-        "wearing",
-        "standing"
+        "wearing"
       ],
       "relationships": [],
       "ocr_text": "",
@@ -232,51 +338,7 @@
         "A small red building with a green door and red lights.",
         "person"
       ],
-      "style_or_mood": "dark"
-    },
-    "chihiro003.jpg": {
-      "image_id": "chihiro003.jpg",
-      "scene": "The image is an illustration of a street scene in a European city",
-      "description": "The image is an illustration of a street scene in a European city. The street is lined with colorful buildings, including a green building with a star on the top left corner, a yellow building with arched windows, and a pink building with red lanterns hanging from the roof. There are also several shops and restaurants on the street, including one with a blue awning and another with a yellow awnings. In the center of the image, there is a man and two children walking on the sidewalk. The sky is blue and there are a few clouds in the background. The overall style of the illustration is whimsical and playful.",
-      "objects": [
-        "building",
-        "house",
-        "window",
-        "colorful buildings with Christmas decorations on street",
-        "colorful building with Christmas lanterns and decorations",
-        "colorfully painted buildings with red lanterns on street",
-        "colorful street scene with yellow building and red lantern",
-        "blue building with red tiled roof and balcony"
-      ],
-      "characters": [
-        "person",
-        "man",
-        "children"
-      ],
-      "actions": [
-        "walking"
-      ],
-      "relationships": [],
-      "ocr_text": "",
-      "spatial_relations": [],
-      "region_descriptions": [
-        "colorful buildings with Christmas decorations on street",
-        "colorful building with Christmas lanterns and decorations",
-        "colorfully painted buildings with red lanterns on street",
-        "colorful street scene with yellow building and red lantern",
-        "blue building with red tiled roof and balcony",
-        "window",
-        "window",
-        "window",
-        "person",
-        "window",
-        "person",
-        "window",
-        "person",
-        "window",
-        "window"
-      ],
-      "style_or_mood": "illustration"
+      "style_or_mood": "mysterious"
     }
   }
 }

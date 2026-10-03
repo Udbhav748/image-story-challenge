@@ -224,8 +224,9 @@ def evaluate_run(rows, out_csv):
     """rows: list of {image, caption, story}. Writes CSV, prints means and failure counts."""
     res = [{**r, **score(r["image"], r["caption"], r["story"])} for r in rows]
     for r in res: r["attribute_conflict"] = " ".join(r["attribute_conflict"])
+    out_rows = [{**r, "image": os.path.basename(r["image"])} for r in res]  # CSV keeps file names only, never absolute paths
     with open(out_csv, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=list(res[0])); w.writeheader(); w.writerows(res)
+        w = csv.DictWriter(f, fieldnames=list(out_rows[0])); w.writeheader(); w.writerows(out_rows)
     num = ["clip_image_story_mean", "clip_image_story_min", "nli_contra_mean", "nli_contra_max",
            "grounding_score", "repetition_rate", "eval_total_s"]
     print("n =", len(res), {k: round(sum(r[k] for r in res) / len(res), 3) for k in num})

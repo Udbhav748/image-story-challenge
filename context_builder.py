@@ -115,7 +115,7 @@ def build_sequence_context(descs: List[Dict[str, Any]], max_words_per_image: int
 
     parts = ["SEQUENCE OF IMAGES (in order):"]
     for i, desc in enumerate(descs):
-        parts.append(f"\n--- IMAGE {i + 1} ({desc.get('image_id', f'image_{i + 1}')}) ---")
+        parts.append(f"\n--- IMAGE {i + 1} ---")  # the file name is deliberately not shown to the story model
         if desc.get("scene"):
             parts.append(f"Location: {desc['scene']}")
         if desc.get("characters"):

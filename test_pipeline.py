@@ -139,11 +139,12 @@ def test_context_builder_single_is_deterministic_and_generic():
 
 
 def test_context_builder_sequence_lists_only_recurring():
-    descs = [{"image_id": "a", "scene": "S1", "characters": ["person"], "od_labels": ["car"], "objects": ["car"]},
-             {"image_id": "b", "scene": "S2", "characters": ["person"], "od_labels": ["tree"], "objects": ["tree"]},
-             {"image_id": "c", "scene": "S3", "characters": [], "od_labels": ["dog"], "objects": ["dog"]}]
+    descs = [{"image_id": "leakyname_a.png", "scene": "S1", "characters": ["person"], "od_labels": ["car"], "objects": ["car"]},
+             {"image_id": "leakyname_b.png", "scene": "S2", "characters": ["person"], "od_labels": ["tree"], "objects": ["tree"]},
+             {"image_id": "leakyname_c.png", "scene": "S3", "characters": [], "od_labels": ["dog"], "objects": ["dog"]}]
     seq = context_builder.build_sequence_context(descs)
     assert "SEQUENCE OF IMAGES" in seq and "IMAGE 3" in seq and "CONTINUITY NOTES" in seq
+    assert "leakyname" not in seq   # file names must not reach the story model (they leaked a character name before)
     notes = seq.split("CONTINUITY NOTES")[1]
     assert "Recurring characters (in 2+ frames): person" in notes
     assert "car" not in notes and "tree" not in notes and "dog" not in notes   # present in only one frame
@@ -272,6 +273,10 @@ def test_model_score_end_to_end():
     assert r_good["eval_total_s"] >= r_good["eval_clip_s"]
     clip_n, g = metric.grounding_from_components(r_good["clip_image_story_mean"], r_good["nli_contra_mean"], bool(r_good["attribute_conflict"]))
     assert abs(g - r_good["grounding_score"]) < 1e-9   # score() really uses the production formula
+    with tempfile.TemporaryDirectory() as d:           # evaluate_run writes file names only, never absolute paths
+        out = os.path.join(d, "eval.csv")
+        metric.evaluate_run([{"image": SELFTEST_IMAGE, "caption": cap, "story": good}], out)
+        assert list(csv.DictReader(open(out, encoding="utf-8")))[0]["image"] == "selftest_image.jpg"
 
 
 def test_model_vision_json_schema():

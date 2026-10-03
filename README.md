@@ -1,745 +1,381 @@
-# Image -> Story
+# Image -> Story: BLIP baseline vs Florence-2 structured seeing
 
-**Turn visual scenes into structured context, then structured context into coherent stories -- completely locally.**
+Challenge: Image -> Story (Modules 7 and 10). A local pipeline turns images into stories, and an automatic evaluation
+measures how well the story matches the image. Everything runs locally and offline on CPU; no hosted inference API is used.
 
-A fully local multimodal pipeline that understands images, builds structured visual context, generates coherent stories, and automatically evaluates grounding, consistency, repetition, and runtime.
+**Final submission artifacts** (produced by the commands in [Reproducing the results](#reproducing-the-results)):
 
----
+| Artifact | Contents |
+|---|---|
+| `results_final.csv`, `vision_final.json` | Normal comparison, 8 images x 2 pipelines |
+| `results_final_fixlen.csv`, `vision_final_fixlen.json` | Length-controlled comparison (`--fix-length`) |
+| `combined_story.json` | One story across all 8 images (`--multi`) with the continuity proxy |
+| `selftest.csv` | Output of `python metric.py` (synthetic strings) |
+| `experiments.md` | Experiment write-up |
 
-## Highlights
+All other result files are historical or diagnostic runs, kept as evidence; see [Result files](#result-files).
 
-* 🖼️ **Local image understanding** -- Florence-2 with detailed caption, object detection, and dense region captioning
-* 🧠 **Structured visual context** -- Deterministic JSON with scene, characters, objects, actions, spatial relations, and region descriptions
-* 📖 **Multi-image story generation** -- Sequence-aware context builder with continuity notes across frames
-* 📊 **Automated story evaluation** -- Grounding (CLIP + NLI + attribute conflict), repetition, continuity, length validation, runtime
-* 🔒 **Fully local / offline inference** -- No hosted APIs; models download once and run on CPU
+## Problem
 
----
+The baseline compresses each image into **one sentence** before the story model sees it. The story model never sees the image,
+so details are lost and the model fills the gaps with invented ones. Failures observed in the baseline output:
 
-## Problem Statement
+1. **Wrong length.** 0/8 baseline stories are 80-120 words (range 30-76). The baseline's only built-in check is word count.
+2. **Details with no basis in the input.** `chihiro003.jpg`: the caption is "a painting of a street scene with a man walking down the street" and the story adds "jeans and a t-shirt that shows off his muscular build". `thumb-chihiro008.png`: the caption mentions "a man and a dog" and the story calls the dog "a golden retriever".
+3. **Generic stories from a one-sentence caption.** `thumb-chihiro007.png`: the caption is "a restaurant with a table and chairs" and the story adds coffee, bread and a waiter that nothing in the input supports.
 
-### The Baseline Bottleneck
+## Baseline
+
+`Image -> BLIP (Salesforce/blip-image-captioning-base) -> one sentence -> Qwen2.5-0.5B-Instruct -> story`
+
+> The original instructor baseline code was unavailable, so this repository uses a **stand-in baseline** that matches the documented
+> architecture (BLIP caption -> Qwen2.5-0.5B-Instruct, 80-120 word story). It is not the exact official baseline, and its absolute
+> numbers may differ from the official one.
+
+## Improved pipeline
 
 ```text
-Image
-  ↓
-BLIP (Salesforce/blip-image-captioning-base)
-  ↓
-Single caption: "a girl sitting in the back of a car with a bunch of flowers"
-  ↓
-Qwen2.5-0.5B-Instruct
-  ↓
-Story
+IMAGE
+  |
+  +--> BLIP baseline                          (A: one sentence)
+  |
+  +--> Florence-2 seeing (B)                  detailed caption + object detection + dense region captions
+          |
+          v
+       STRUCTURED VISUAL CONTEXT (JSON)       scene, characters, objects, actions, regions, mood
+          |
+          v
+       CONTEXT BUILDER (deterministic)        JSON -> short prompt text
+  |
+  v
+QWEN2.5-0.5B-INSTRUCT (same model, seed, decoding and prompt for A and B)
+  |
+  v
+STORY --> EVALUATION (CLIP, NLI, attribute check, repetition, length, runtime)
 ```
 
-The language model never sees the image. It receives **one sentence** as its only visual signal. The result:
+**Module 7 claim:** replace BLIP's single-sentence image understanding with Florence-2 structured visual extraction. The detailed caption,
+object detection, dense region captions, the structured JSON and the context builder are implementation components of this richer
+seeing stage. **They were not ablated separately**, so any gain cannot be attributed to one of them.
 
-* **Missing objects** -- furniture, background details, text in scene
-* **Incorrect attributes** -- caption says "man", story invents "golden retriever"
-* **Contradictions** -- story describes coffee and bread when image shows hot dogs
-* **Weak grounding** -- no visual evidence for generated narrative
-* **Disconnected multi-frame stories** -- each image treated independently
+- `seeing.py` runs Florence-2-base (`florence-community/Florence-2-base`, greedy decoding, CPU) with three tasks: `<MORE_DETAILED_CAPTION>`,
+  `<OD>` and `<DENSE_REGION_CAPTION>`, then derives `characters`, `actions`, `spatial_relations` and `style_or_mood` from that text with
+  fixed keyword lists (closed vocabularies; see Limitations). `<OCR>` is disabled (it returned junk on anime frames).
+- `context_builder.py` is deterministic and has no ML and no image-specific vocabulary. It keeps the detected object labels in order,
+  adds up to 5 further object descriptions, up to 3 region descriptions, and trims to 180 words.
+- Multi-image mode (`--multi`) builds a sequence context in filename order. Its continuity notes list only entities that occur in at least
+  two different frames. File names are not shown to the story model.
 
----
-
-## Project Goal
-
-1. **Improve the image-understanding stage** -- replace single caption with structured visual extraction
-2. **Build richer structured visual context** -- deterministic JSON populated only from model outputs
-3. **Preserve information across multiple images** -- sequence context with recurring entities
-4. **Generate a coherent story** -- prompt the LLM with organized facts, not raw descriptions
-5. **Evaluate grounding and consistency** -- automatic metrics that measure what matters
-6. **Keep everything runnable locally** -- offline, CPU-compatible, reproducible
-
-Pipeline view:
-
-**Image Understanding -> Structured Context -> Sequence Context -> Story Generation -> Evaluation**
-
----
-
-## Architecture
-
-```mermaid
-flowchart TD
-    A[Images] --> B[Florence-2]
-    B --> C[Detailed Caption]
-    B --> D[Object Detection]
-    B --> E[Dense Region Caption]
-    C & D & E --> F[Structured Vision JSON]
-    F --> G[Deterministic Context Builder]
-    G --> H[Sequence Context / Continuity Notes]
-    H --> I[Qwen2.5-0.5B-Instruct]
-    I --> J[Generated Story]
-    J --> K[Evaluation Layer]
-    K --> L[Grounding Score]
-    K --> M[CLIP Similarity]
-    K --> N[NLI Contradiction]
-    K --> O[Attribute Conflict]
-    K --> P[Repetition Rate]
-    K --> Q[Continuity Score]
-    K --> R[Length Valid]
-    K --> S[Runtime]
-```
-
-### Components
-
-| Component | Implementation | Role |
-|-----------|----------------|------|
-| **Vision** | `seeing.py` | Florence-2-base: `<MORE_DETAILED_CAPTION>`, `<OD>`, `<DENSE_REGION_CAPTION>` |
-| **Context** | `context_builder.py` | Deterministic templates -> single-image & sequence prompts |
-| **Story** | `baseline.py` + `main.py` | Qwen2.5-0.5B-Instruct (greedy, seed=0) |
-| **Evaluation** | `metric.py` | CLIP ViT-B/32, NLI MiniLM2, deterministic checks |
-| **Orchestration** | `main.py` | CLI: `--baseline`, `--improved`, `--both`, `--multi`, `--fix-length` |
-
----
-
-## Why the Baseline Was Insufficient
-
-The baseline compresses a photograph into **one sentence** before the story model sees it.
-
-### From Single Caption -> Structured Visual Context
-
-The implemented vision stage uses **Florence-2-base** with three tasks:
-
-| Task | Purpose | Example Output |
-|------|---------|----------------|
-| `<MORE_DETAILED_CAPTION>` | Paragraph-level scene description | "The image is an illustration of a street scene in a European city. The street is lined with colorful buildings..." |
-| `<OD>` | Object detection labels | `["building", "house", "window", "person"]` |
-| `<DENSE_REGION_CAPTION>` | Region-level descriptions with bboxes | `["colorful buildings with Christmas decorations on street", "person", "window"]` |
-
-### Structured Representation
+### Structured vision JSON
 
 ```json
 {
-  "image_id": "chihiro003.jpg",
-  "scene": "The image is an illustration of a street scene in a European city",
-  "description": "The image is an illustration of a street scene in a European city. The street is lined with colorful buildings...",
-  "objects": ["building", "house", "window", "colorful buildings with Christmas decorations on street", ...],
-  "characters": ["person", "children", "man"],
-  "actions": ["walking"],
-  "relationships": [],
-  "ocr_text": "",
-  "spatial_relations": [],
-  "region_descriptions": [
-    "colorful buildings with Christmas decorations on street",
-    "colorful building with Christmas lanterns and decorations",
-    "colorfully painted buildings with red lanterns on street",
-    ...
-  ],
-  "style_or_mood": "playful",
-  "runtime_s": 18.5,
-  "model_load_s": 11.1
+  "image_id": "...", "scene": "...", "description": "...",
+  "objects": ["..."], "od_labels": ["..."], "characters": ["..."], "actions": ["..."],
+  "relationships": [], "spatial_relations": [], "region_descriptions": ["..."], "style_or_mood": "...",
+  "ocr_text": "", "runtime_s": 0.0, "model_load_s": 0.0
 }
 ```
 
-**Fields are populated only when supported by the model output** -- no hallucinated fields.
-
----
-
-## Context Builder
-
-`context_builder.py` converts structured vision JSON into a concise, deterministic prompt for the story model.
-
-### Single-Image Mode
-```
-Scene: The image is an illustration of a street scene in a European city.
-Characters: person, children, man.
-Objects: building, house, window, colorful buildings with Christmas decorations on street, ...
-Actions: walking.
-Region: colorful buildings with Christmas decorations on street.
-Region: colorful building with Christmas lanterns and decorations.
-Style: playful.
-```
-
-### Sequence Mode (Multi-Image)
-
-```
-SEQUENCE OF IMAGES (in order):
---- IMAGE 1 (chihiro003.jpg) ---
-Location: The image is an illustration of a street scene in a European city
-Characters: person, children, man
-Objects: building, house, window
-Actions: walking
-Detail: colorful buildings with Christmas decorations on street
-Detail: colorful building with Christmas lanterns and decorations
-Mood: playful
-
---- IMAGE 2 (thumb-chihiro001.png) ---
-Location: The image shows a young boy sitting in the back seat of a car
-Characters: girl, boy, human
-Objects: footwear, human face, person
-Actions: sitting, wearing, holding
-Detail: A young girl sitting on the back seat of a car with a bunch of flowers.
-Detail: A young boy sitting on a couch with a bouquet of flowers in his hand.
-
---- CONTINUITY NOTES ---
-Recurring characters: person, children, man, girl, boy, human
-Recurring locations: street, city, car
-Recurring objects: building, house, window, footwear, human face, person
-Maintain character identity and location consistency across frames.
-Connect events naturally; do not reset the story at each image.
-```
-
-**The vision model extracts facts. The context builder organizes those facts. The story model turns them into narrative.**
-
----
-
-## Multi-Image Story Generation
-
-```text
-Image 1 -> Context 1 ─┐
-Image 2 -> Context 2 ─┤
-Image 3 -> Context 3 ─┤
-...                  ├-> Sequence Context -> Story
-Image N -> Context N ─┘
-```
-
-The goal: a connected narrative across frames, not independent mini-stories per image.
-
-**Current limitations:** The 0.5B model struggles with long sequence prompts; continuity metrics show room for improvement.
-
----
-
-## Evaluation (Module 10)
-
-Evaluation is a first-class part of the pipeline. Every `(image, context, story)` tuple is scored automatically.
-
-| Metric | What It Measures | Direction | Implementation |
-|--------|------------------|-----------|----------------|
-| **Grounding Score** | Composite: visual alignment + consistency + attribute accuracy | Higher | `0.4*clip_n + 0.4*(1-nli_contra_mean) + 0.2*(1-attr_conflict)` |
-| **CLIP Similarity** | Image-story semantic similarity (ViT-B/32 cosine) | Higher | `clip((mean_cos - 0.15)/0.15, 0, 1)` |
-| **NLI Contradiction** | Contradiction between **generated context** and story sentences | Lower | `cross-encoder/nli-MiniLM2-L6-H768` mean P(contradiction) |
-| **Attribute Conflict** | Color/material words in story not present in context | Lower | Set difference per group (color, material) |
-| **Repetition Rate** | Fraction of repeated trigrams in story | Lower | `repeated_trigrams / total_trigrams` |
-| **Entity Consistency** | Fraction of recurring visual entities mentioned in story | Higher | `(recurring ∩ story_words) / recurring` |
-| **Transition Markers** | Count of temporal words (then, next, after, later...) | Context | Lexicon lookup |
-| **Adjacent Similarity** | Entity Jaccard between adjacent frame contexts | Context | Mean over adjacent pairs |
-| **Length Valid** | Story within 80-120 word target range | Pass/Fail | Hard check |
-| **Runtime** | End-to-end execution cost | Lower | Monotonic timers: `seeing_s`, `story_s`, `total_s` |
-
-**`grounding_pass`** = `grounding_score ≥ 0.60` AND no attribute conflict AND `length_valid`.
-
-> **Important:** NLI evaluates contradiction between the **story and the generated context/caption** — it measures *consistency with the extracted visual context*, not independent image verification. Only CLIP directly compares image to story. These are automatic proxies — not perfect human-quality measures.
-
-### Evaluation Interpretation Table
-
-| Evaluation Signal | Normal Baseline | Normal Improved | Fixlen Baseline | Fixlen Improved | Interpretation |
-|-------------------|----------------|----------------|-----------------|----------------|----------------|
-| Grounding Score   | 0.783          | **0.866**      | 0.756           | **0.789**      | Higher = stronger alignment |
-| CLIP Similarity   | 0.233          | **0.258**      | 0.240           | **0.253**      | Higher = stronger image-story semantic similarity |
-| NLI Contradiction | 0.098          | **0.055**      | 0.207           | **0.088**      | Lower = fewer textual contradictions with context |
-| Repetition Rate   | 0.0034         | 0.0073         | 0.0068          | 0.0118         | Lower = less repeated phrasing |
-| Entity Consistency| 1.000          | 1.000          | 1.000           | 1.000          | Higher = stronger cross-frame consistency |
-| Length Valid      | 0/8            | **2/8**        | 6/8             | 6/8            | Requirement compliance |
-| Grounding Pass    | 0/8            | **2/8**        | **5/8**         | 4/8            | Composite threshold |
-| Runtime (total)   | 13.4 s         | 27.0 s         | 29.4 s          | 41.9 s         | Lower = more efficient |
-
-> **Note:** NLI evaluates contradiction between the **story and the generated context/caption** — it measures *consistency with the extracted visual context*, not independent image verification. Only CLIP directly compares image to story. These are automatic proxies — not perfect human-quality measures.
-
----
-
-## Baseline vs Improved Results
-
-**8-image offline comparison** -- same images, same metric, same Qwen story model.
-
-### Normal Mode (no length control)
-
-| Metric | Baseline (BLIP) | Improved (Florence-2) | Delta |
-|--------|-----------------|----------------------|-------|
-| Mean Grounding Score | 0.783 | **0.866** | **+0.083** |
-| Mean CLIP Similarity | 0.233 | **0.258** | **+0.025** |
-| Mean NLI Contradiction | 0.098 | **0.055** | **-0.043** |
-| Mean Repetition Rate | 0.0034 | 0.0073 | +0.0039 |
-| Length Valid (80-120 words) | 0/8 | **2/8** | +2 |
-| Grounding Pass | 0/8 | **2/8** | +2 |
-| Mean Seeing Time | 4.3 s | 18.1 s | +13.8 s |
-| Mean Story Time | 9.1 s | 8.8 s | -0.3 s |
-| Mean Total Time | 13.4 s | 27.0 s | +13.6 s |
-
-*Source: `results_new.csv` -- 8 images × 2 variants, run offline with `HF_HUB_OFFLINE=1`.*
-
-### Length-Controlled Mode (`--fix-length`)
-
-With `--fix-length`, both pipelines retry generation up to 3 times with stricter length prompts until the story falls in 80–120 words (or return the best attempt). This controls the length confound by applying the same length-control mechanism to both pipelines. It does not force identical word counts.
-
-| Metric | Baseline (BLIP) | Improved (Florence-2) | Delta |
-|--------|-----------------|----------------------|-------|
-| Mean Grounding Score | 0.756 | **0.789** | **+0.033** |
-| Mean CLIP Similarity | 0.240 | **0.253** | **+0.013** |
-| Mean NLI Contradiction | 0.207 | **0.088** | **−0.119** |
-| Mean Repetition Rate | 0.0068 | 0.0118 | +0.0050 |
-| Length Valid (80-120 words) | 6/8 | 6/8 | 0 |
-| Grounding Pass | **5/8** | 4/8 | −1 |
-| Mean Seeing Time | 2.4 s | 17.4 s | +15.0 s |
-| Mean Story Time | 27.0 s | 24.5 s | -2.5 s |
-| Mean Total Time | 29.4 s | 41.9 s | +12.5 s |
-
-*Source: `results_fixlen_new.csv` -- same 8 images, length-controlled, offline.*
-
-**Key insight:** With length controlled, the grounding gain shrinks from +0.083 to +0.033, and baseline wins on grounding pass (5/8 vs 4/8) because both produce 6 valid-length stories but baseline scores higher on the ones that pass. The large normal-mode pass gain (+2 passes) was largely a length artifact. NLI contradiction is substantially reduced (−0.119) with the improved pipeline.
-
----
-
-## Per-Image Evidence
-
-| Image | Normal Δ | Fixlen Δ | Normal Assessment | Fixlen Assessment |
-|-------|----------|----------|-------------------|-------------------|
-| chihiro003.jpg | +0.065 | −0.193 | Improved: dense regions gave "man + two children walking", "colorful buildings with lanterns" | **Regressed**: longer context confused Qwen; story less coherent |
-| thumb-chihiro001.png | −0.039 | −0.027 | Regressed: dense regions confused girl/boy; context noisier | Regressed: gender confusion in dense regions |
-| thumb-chihiro002.png | +0.239 | +0.179 | **Improved**: OD+dense corrected "woman on rock" → "girl + monster statue" | **Improved**: correction persists |
-| thumb-chihiro004.png | −0.061 | −0.044 | Regressed: dense regions added false "dog" and "hot dog" | Regressed: false "dog" detection persists |
-| thumb-chihiro005.png | +0.121 | +0.113 | **Improved**: detailed caption corrected "man in suit" → "boy with green hair" | **Improved**: correction persists |
-| thumb-chihiro006.png | −0.014 | −0.035 | Slight regress: both reasonable | Slight regress |
-| thumb-chihiro007.png | +0.120 | +0.133 | **Improved**: dense regions gave "lantern, stool, bowl, bird" | **Improved**: consistent gain |
-| thumb-chihiro008.png | +0.230 | +0.133 | **Improved**: detailed caption corrected "town + dog" → "video game screenshot" | **Improved**: gain persists but smaller |
-
-**Normal mode:** Improvements on 5/8 images. Largest gains on 002 (+0.239), 008 (+0.230), 005 (+0.121), 007 (+0.120), 003 (+0.065). Regressions on 3/8 images: 001 (−0.039), 004 (−0.061), 006 (−0.014).
-
-**Fixlen mode:** Improvements on 4/8 images (002, 005, 007, 008). Regressions on 4/8 images: 001, 003, 004, 006. The grounding gain is real but smaller (+0.033 vs +0.083). Baseline wins on grounding pass (5/8 vs 4/8) when length is controlled, even though length-valid is tied at 6/8 each.
-
----
-
-## Key Finding
-
-> **Florence-2's structured visual extraction (detailed caption + OD + dense regions) raises grounding score by +0.083 normally and +0.033 when length is controlled, while substantially reducing NLI contradiction (−0.043 normal, −0.119 fixlen). In normal mode, grounding improved on 5/8 images and regressed on 3/8; in length-controlled mode, improved and baseline each win on 4/8 images, and baseline wins on grounding pass (5/8 vs 4/8) because both produce 6 valid-length stories. The single-sentence BLIP bottleneck is real and the richer visual representation helps on average, but Florence-2 introduces its own errors (false "dog", gender confusion) and the small Qwen model struggles to integrate longer contexts under length constraints.**
-
-**Runtime tradeoff:** Seeing cost increases ~4–7× (4.3 s → 18.1 s/image normal; 2.4 s → 17.4 s fixlen). Story generation remains similar in normal mode (~9 s); fixlen multiplies story time ~3× due to retries. Total pipeline ~2× slower normal, ~1.4× slower fixlen.
-
----
-
-## Failure Cases & Limitations
-
-| Failure Mode | Observed In | Impact |
-|--------------|-------------|--------|
-| **Gender confusion** | thumb-chihiro001.png | Dense regions output both "girl" and "boy" for same figure |
-| **False object detection** | thumb-chihiro004.png | Dense regions add "dog" not present in image |
-| **Incorrect scene interpretation** | thumb-chihiro008.png | Detailed caption calls frame "video game screenshot" and adds sword |
-| **Length control failure** | 6/8 improved stories | Qwen 0.5B cannot reliably hit 80-120 words (range: 36-118 normal; 75-120 fixlen) |
-| **Weak sequence coherence** | Multi-image story | 0.5B model cannot maintain long-range narrative continuity |
-| **Increased vision latency** | All improved runs | 3 Florence-2 tasks vs 1 BLIP call |
-| **Context confusion (fixlen)** | chihiro003.jpg fixlen | Longer structured context confused small Qwen model |
-
-### Concrete Baseline Failures (Evidence)
-
-**FAILURE 1: Hallucinated Attribute (chihiro003.jpg)**
-- **Baseline caption:** "a painting of a street scene with a man walking down the street"
-- **Baseline story claim:** "He's dressed in a casual yet stylish outfit, a pair of jeans and a t-shirt that shows off his muscular build"
-- **Observed issue:** The caption mentions only "a man" — no jeans, no t-shirt, no muscular build. The story invents specific clothing and physique.
-- **Metric signal:** Grounding 0.740, CLIP 0.219 (low), NLI 0.111 (moderate). Partially caught by low CLIP and elevated NLI.
-
-**FAILURE 2: Hallucinated Object Class (thumb-chihiro008.png)**
-- **Baseline caption:** "a scene of a town with a man and a dog"
-- **Baseline story claim:** "The dog, a golden retriever, wagged its tail in greeting"
-- **Observed issue:** The caption says "a dog" — the story invents the specific breed "golden retriever". The image shows a video game scene with a figure holding a sword; no dog is clearly visible.
-- **Metric signal:** Grounding 0.746, CLIP 0.213 (low), NLI 0.059. Weakly caught by low CLIP.
-
-**FAILURE 3: Generic Hallucination from Underspecified Caption (thumb-chihiro007.png)**
-- **Baseline caption:** "a restaurant with a table and chairs"
-- **Baseline story claims:** coffee, bread, waiter, conversation, cozy atmosphere
-- **Observed issue:** The caption gives only "restaurant + table + chairs". The story invents an entire dining scene with no visual basis.
-- **Metric signal:** Grounding 0.787, CLIP 0.249, NLI 0.191 (high contradiction). Partially caught by high NLI contradiction.
-
-### Regression Analysis (Images Where Improved < Baseline)
-
-| Image | Cause | Evidence |
-|-------|-------|----------|
-| thumb-chihiro001.png | Gender confusion in dense regions | Dense regions: "girl sitting..." AND "boy sitting..." |
-| thumb-chihiro004.png | False "dog" detection | Dense regions add "dog"; characters list includes "dog" |
-| thumb-chihiro006.png | Both reasonable; improved slightly shorter | Baseline: pig painting; Improved: pig in kitchen |
-| chihiro003.jpg (fixlen) | Longer context confused small Qwen | Fixlen: baseline 0.800 → improved 0.607 |
-
-### Improvement Analysis (Strongest Gains)
-
-| Image | Normal Δ | Fixlen Δ | Reason |
-|-------|----------|----------|--------|
-| thumb-chihiro002.png | +0.239 | +0.179 | Corrected "woman on rock" → "girl + monster statue" |
-| thumb-chihiro008.png | +0.230 | +0.133 | Corrected "town + dog" → "video game screenshot" |
-| thumb-chihiro007.png | +0.120 | +0.133 | Dense regions gave "lantern, stool, bowl, bird" |
-| thumb-chihiro005.png | +0.121 | +0.113 | Corrected "man in suit on ledge" → "boy on balcony" |
-
-**A richer context is only useful if the underlying vision information is accurate.**
-
----
-
-## Example Output
-
-### Input
-```
-chihiro003.jpg
-```
-
-### Visual Context (Improved)
-```
-Scene: The image is an illustration of a street scene in a European city.
-Characters: person, children, man.
-Objects: building, house, window, colorful buildings with Christmas decorations on street, ...
-Actions: walking.
-Region: colorful buildings with Christmas decorations on street.
-Region: colorful building with Christmas lanterns and decorations.
-Style: playful.
-```
-
-### Generated Story (Improved)
-> In the vibrant streets of a European city, a group of children played under the twinkling Christmas lights. A man, dressed in a festive suit, walked down the street, his eyes sparkling with excitement as he passed by the colorful buildings adorned with Christmas decorations. The children watched, their faces lit up by the cheerful cheer of the adults around them.
-
-*61 words -- grounding: 0.805, CLIP: 0.232, NLI: 0.032*
-
----
-
-## Visual Examples
-
-### Challenge Images with Generated Stories (8 frames from *Spirited Away*)
-
-All 8 evaluation images are included in the `images/` folder. Run the full comparison:
-
-```powershell
-python main.py images/ --both --output results.csv
-```
-
----
-
-### 1. chihiro003.jpg — Street scene, European city
-
-<p align="center">
-  <img src="images/chihiro003.jpg" alt="chihiro003.jpg - European city street scene" width="400"/>
-</p>
-
-| Pipeline | Grounding | Words | Story |
-|----------|-----------|-------|-------|
-| **Baseline (BLIP)** | 0.740 | 71 | A man steps out onto the bustling street, his footsteps echoing through the concrete. He's dressed in a casual yet stylish outfit, a pair of jeans and a t-shirt that shows off his muscular build. The sun is shining brightly, casting a warm glow over the cityscape below. The man's eyes are fixed on the sidewalk, looking for something to grab. He's walking slowly, taking his time to enjoy the moment. |
-| **Improved (Florence-2)** | 0.805 | 61 | In the vibrant streets of a European city, a group of children played under the twinkling Christmas lights. A man, dressed in a festive suit, walked down the street, his eyes sparkling with excitement as he passed by the colorful buildings adorned with Christmas decorations. The children watched, their faces lit up by the cheerful cheer of the adults around them. |
-
----
-
-### 2. thumb-chihiro001.png — Girl/boy in car with flowers
-
-<p align="center">
-  <img src="images/thumb-chihiro001.png" alt="thumb-chihiro001.png - Child in car with flowers" width="400"/>
-</p>
-
-| Pipeline | Grounding | Words | Story |
-|----------|-----------|-------|-------|
-| **Baseline (BLIP)** | 0.856 | 45 | A girl sat in the back of a car, surrounded by colorful flowers. The sun shone through the window, casting a warm glow on her face. She was lost in thought as she gazed at the vibrant blooms, feeling grateful for the beauty around her. |
-| **Improved (Florence-2)** | 0.817 | 66 | In the heart of a bustling city, a young girl sat in the back seat of a sleek, modern car, her eyes fixed on the vibrant blooms around her. She held the bouquet in one hand, her fingers tracing the delicate petals with practiced ease. The scene was captured by a camera lens, capturing the essence of a moment that would soon be shared with others. |
-
----
-
-### 3. thumb-chihiro002.png — Girl + monster statue in forest
-
-<p align="center">
-  <img src="images/thumb-chihiro002.png" alt="thumb-chihiro002.png - Girl and monster statue" width="400"/>
-</p>
-
-| Pipeline | Grounding | Words | Story |
-|----------|-----------|-------|-------|
-| **Baseline (BLIP)** | 0.644 | 47 | A woman sits alone on a rocky outcropping, gazing out at the car that drives by. The sun sets over the horizon, casting long shadows across the landscape. She takes a deep breath, feeling the cool breeze on her face as she watches the world pass by. |
-| **Improved (Florence-2)** | 0.883 | 75 | In the heart of the dense forest, a young girl stood beside a large green monster statue, her eyes sparkling with excitement. She wore a simple green dress and a pair of sturdy boots, her laughter echoing through the trees. The car was parked nearby, its headlights casting long shadows on the ground. The scene was a stark contrast to the serene beauty of the forest, but the girl's presence was a joy to behold. |
-
----
-
-### 4. thumb-chihiro004.png — Family meal in restaurant
-
-<p align="center">
-  <img src="images/thumb-chihiro004.png" alt="thumb-chihiro004.png - Family meal" width="400"/>
-</p>
-
-| Pipeline | Grounding | Words | Story |
-|----------|-----------|-------|-------|
-| **Baseline (BLIP)** | 0.895 | 30 | A man and woman sit at a table, sipping on coffee and savoring their meal. The aroma of freshly baked bread fills the air as they chat about their day. |
-| **Improved (Florence-2)** | 0.834 | 80 | In the bustling restaurant, the family sat at a table, their faces lit by the warm glow of the restaurant's lights. The man, with his rugged mustache and sharp eyes, was savoring a hot dog, while the woman, with her gentle demeanor, watched with a curious gaze. The child, nestled between them, was munching on a red fish, its vibrant colors adding to the din. The scene was one of joy and companionship, as the family enjoyed their meal together. |
-
----
-
-### 5. thumb-chihiro005.png — Green-haired boy on balcony
-
-<p align="center">
-  <img src="images/thumb-chihiro005.png" alt="thumb-chihiro005.png - Boy on balcony" width="400"/>
-</p>
-
-| Pipeline | Grounding | Words | Story |
-|----------|-----------|-------|-------|
-| **Baseline (BLIP)** | 0.722 | 50 | A man in a formal suit and tie stands on a ledge, looking out over a cityscape. The sun glints off his polished leather jacket, casting a warm glow on his face. He takes a deep breath, feeling the tension in his muscles as he prepares to make a statement. |
-| **Improved (Florence-2)** | 0.843 | 53 | In a serene garden, a young man with green hair stands on a red railing, his eyes fixed on the distant balcony. He holds a small, delicate bird in his hand, its wings fluttering gently as it watches the world below. The scene is peaceful, filled with a sense of tranquility and beauty. |
-
----
-
-### 6. thumb-chihiro006.png — Pig in kitchen with food
-
-<p align="center">
-  <img src="images/thumb-chihiro006.png" alt="thumb-chihiro006.png - Pig in kitchen" width="400"/>
-</p>
-
-| Pipeline | Grounding | Words | Story |
-|----------|-----------|-------|-------|
-| **Baseline (BLIP)** | 0.878 | 58 | A pig, with its long snout and bushy tail, was painting a picture of a man in a field. The pig's eyes were fixed on the figure, his brush strokes soft and gentle. The man's face was serene, his expression calm and composed. The pig's artistry was evident in every stroke, capturing the essence of the man's presence. |
-| **Improved (Florence-2)** | 0.864 | 47 | In a vibrant world, a pig with a blue shirt stands proudly, its eyes twinkling with mischief. It holds a green leafy vegetable in its mouth, its fur shimmering under the sun. In the background, a leafy tree casts a golden glow, adding to the lively scene. |
-
----
-
-### 7. thumb-chihiro007.png — Chinese restaurant entrance
-
-<p align="center">
-  <img src="images/thumb-chihiro007.png" alt="thumb-chihiro007.png - Chinese restaurant" width="400"/>
-</p>
-
-| Pipeline | Grounding | Words | Story |
-|----------|-----------|-------|-------|
-| **Baseline (BLIP)** | 0.787 | 76 | In the dimly lit restaurant, the soft glow of the overhead light bathed the tables in a warm, inviting light. The air was filled with the scent of freshly baked bread and the aroma of steaming coffee. A friendly waiter greeted each patron with a warm smile, and the conversation flowed effortlessly as they sipped their coffee and ate their meals. The atmosphere was cozy and welcoming, perfect for a special occasion or a casual dinner. |
-| **Improved (Florence-2)** | 0.907 | 118 | In the heart of the bustling city, amidst the vibrant lights and laughter, a cozy Chinese restaurant stood as a beacon of warmth and tradition. The entrance was adorned with twinkling lanterns that cast a gentle glow over the tables. A wooden stool sat gracefully in the center, its legs resting on a sturdy chair, while a bird perched on a branch nearby, its feathers shimmering under the soft glow of the lantern. The air was filled with the sweet aroma of steaming hot food and the melodious tunes of traditional Chinese music playing softly in the background. This scene captured the essence of a welcoming and festive atmosphere, perfect for a memorable meal or a warm conversation. |
-
----
-
-### 8. thumb-chihiro008.png — Night town, video game style
-
-<p align="center">
-  <img src="images/thumb-chihiro008.png" alt="thumb-chihiro008.png - Night town" width="400"/>
-</p>
-
-| Pipeline | Grounding | Words | Story |
-|----------|-----------|-------|-------|
-| **Baseline (BLIP)** | 0.746 | 76 | In the heart of a bustling town, a man sat on a bench, his eyes fixed on a distant dog. The dog, a golden retriever, wagged its tail in greeting. The man's face lit up as he watched the dog play with a toy, its tail swishing back and forth. The dog, in turn, wagged its tail back and forth, its eyes sparkling with joy. The man smiled, feeling grateful for the simple bond between them. |
-| **Improved (Florence-2)** | 0.975 | 36 | In a small, dimly lit room, a figure stood before a small red building with a green door and red lights. The figure wore a dark cloak and held a small red building in her hands. |
-
----
-
-## Model Stack
-
-| Component | Model |
-|-----------|-------|
-| Baseline vision | `Salesforce/blip-image-captioning-base` |
-| Improved vision | `florence-community/Florence-2-base` |
-| Story generation | `Qwen/Qwen2.5-0.5B-Instruct` |
-| Image-story similarity | `openai/clip-vit-base-patch32` |
-| Contradiction evaluation | `cross-encoder/nli-MiniLM2-L6-H768` |
-
-Models are downloaded once via `download_models.py` and cached locally. Inference runs entirely on CPU.
-
----
-
-## Fully Local & Offline
-
-> **No OpenAI, Gemini, Claude, Groq, Together, or other hosted inference API is required at runtime.**
-
-```powershell
-# One-time download (needs internet)
-pip install -r requirements.txt
-python download_models.py
-
-# Offline execution
-$env:HF_HUB_OFFLINE = "1"
-$env:TRANSFORMERS_OFFLINE = "1"
-
-# Run pipeline
-python main.py images/ --both --output results.csv
-```
-
----
+Fields are filled only from model output. `od_labels` are the object-detection labels used for entity matching across frames.
+
+## Experimental fairness
+
+Identical for baseline and improved: the Qwen2.5-0.5B-Instruct model, seed 0, greedy decoding, `repetition_penalty=1.05`, the story prompt
+template, the evaluation formula and threshold. `--fix-length` applies the same mechanism to both. The only intended difference is the
+seeing stage (and the text built from it). Model loading is excluded from every per-image runtime.
+
+**Length-controlled** (`--fix-length`): up to 3 greedy attempts with progressively stricter length prompts. Each attempt is cut to whole sentences
+(a cut-off last sentence is dropped) and to at most 120 words. The first attempt with 80-120 words is returned; otherwise the attempt closest to
+100 words. This does **not** produce equal word counts for the two pipelines.
+
+## Evaluation
+
+| Metric | Meaning |
+|---|---|
+| `grounding_score` | `0.4*clip_n + 0.4*(1 - nli_contra_mean) + 0.2*(0 if attribute_conflict else 1)` |
+| CLIP (`clip_image_story_mean`) | Cosine similarity between the **image** and each story sentence (ViT-B/32), averaged; `clip_n = clip((cos - 0.15)/0.15, 0, 1)`. The only signal that compares the story with the image itself. |
+| NLI (`nli_contra_mean`) | Mean contradiction probability between the supplied context (caption or structured context) and each story sentence. It measures **textual consistency with the extracted visual context**; it is not independent verification of the image. |
+| `attribute_conflict` | Deterministic check of colour and material words: a different colour or material than the context names, or a material whose usual colour the context's colour excludes (for example "white cabinets" vs "oak cabinet"). Heuristic; can raise false alarms. |
+| `length_valid` | `80 <= words <= 120`. A benchmark requirement, **not** a quality measure: a story can be well aligned but too short, or the right length and visually wrong. |
+| `grounding_pass` | `grounding_score >= 0.60` AND no attribute conflict AND `length_valid` |
+| Repetition | Fraction of repeated word trigrams (reported only) |
+| Runtime | `see_s` + `story_s` = `generation_s`; evaluation cost `eval_clip_s`, `eval_nli_s`, `eval_rules_s`, `eval_total_s` is reported separately (`time.perf_counter`) |
+
+`grounding_score` is a composite automatic proxy, not ground truth. The 0.60 threshold and the CLIP range are untuned.
+
+**Continuity** (`--multi` only) is a lightweight structural proxy based on entity overlap and transition words. It does not fully evaluate narrative
+coherence. For ordinary single-image evaluation these metrics are not computed or reported.
+
+## Results
+
+Source of truth: `results_final.csv` (normal) and `results_final_fixlen.csv` (length-controlled), 8 images, one run, 16/16 evaluations
+succeeded in each. The two comparisons use the same images.
+
+| Metric | Baseline (normal) | Improved (normal) | Delta | Baseline (length-controlled) | Improved (length-controlled) | Delta |
+|---|---|---|---|---|---|---|
+| Mean grounding score | 0.783 | 0.856 | +0.072 | 0.756 | 0.827 | +0.070 |
+| Mean CLIP image-story similarity | 0.233 | 0.257 | +0.024 | 0.240 | 0.254 | +0.014 |
+| Mean NLI contradiction (lower is better) | 0.098 | 0.075 | -0.023 | 0.207 | 0.061 | -0.145 |
+| Mean repetition rate (lower is better) | 0.0034 | 0.0187 | +0.0154 | 0.0068 | 0.0034 | -0.0034 |
+| Length valid (80-120 words) | 0/8 | 1/8 | | 6/8 | 6/8 | |
+| Grounding pass | 0/8 | 1/8 | | 5/8 | 5/8 | |
+| Mean words per story | 56.6 | 62.6 | | 92.8 | 93.1 | |
+| Images improved / regressed (grounding score) | | 5 / 3 | | | 5 / 3 | |
+
+Per image, normal mode:
+
+| Image | Baseline grounding | Improved grounding | Delta | Delta CLIP | Delta NLI | Words (baseline / improved) |
+|---|---|---|---|---|---|---|
+| chihiro003.jpg | 0.740 | 0.856 | +0.116 | +0.032 | -0.075 | 71 / 99 |
+| thumb-chihiro001.png | 0.856 | 0.817 | -0.039 | -0.010 | +0.033 | 45 / 66 |
+| thumb-chihiro002.png | 0.644 | 0.911 | +0.267 | +0.068 | -0.218 | 47 / 65 |
+| thumb-chihiro004.png | 0.895 | 0.823 | -0.073 | -0.020 | +0.050 | 30 / 59 |
+| thumb-chihiro005.png | 0.722 | 0.841 | +0.119 | +0.051 | +0.042 | 50 / 41 |
+| thumb-chihiro006.png | 0.878 | 0.975 | +0.097 | +0.029 | -0.047 | 58 / 66 |
+| thumb-chihiro007.png | 0.787 | 0.750 | -0.037 | -0.011 | +0.019 | 76 / 52 |
+| thumb-chihiro008.png | 0.746 | 0.873 | +0.127 | +0.050 | +0.013 | 76 / 53 |
+
+Per image, length-controlled:
+
+| Image | Baseline grounding | Improved grounding | Delta | Delta CLIP | Delta NLI | Words (baseline / improved) |
+|---|---|---|---|---|---|---|
+| chihiro003.jpg | 0.800 | 0.887 | +0.087 | +0.033 | +0.001 | 107 / 110 |
+| thumb-chihiro001.png | 0.811 | 0.783 | -0.027 | +0.009 | +0.129 | 66 / 114 |
+| thumb-chihiro002.png | 0.691 | 0.712 | +0.021 | +0.049 | -0.224 | 86 / 116 |
+| thumb-chihiro004.png | 0.902 | 0.827 | -0.075 | -0.020 | +0.054 | 52 / 59 |
+| thumb-chihiro005.png | 0.677 | 0.821 | +0.145 | +0.019 | -0.236 | 112 / 61 |
+| thumb-chihiro006.png | 0.905 | 0.851 | -0.054 | -0.033 | -0.086 | 82 / 106 |
+| thumb-chihiro007.png | 0.777 | 0.911 | +0.133 | +0.031 | -0.127 | 117 / 92 |
+| thumb-chihiro008.png | 0.488 | 0.820 | +0.333 | +0.024 | -0.675 | 120 / 87 |
+
+### Runtime
+
+| Stage (mean seconds per image, model loading excluded) | Baseline (normal) | Improved (normal) | Baseline (length-controlled) | Improved (length-controlled) |
+|---|---|---|---|---|
+| Seeing / vision | 1.4 | 15.5 | 1.5 | 16.5 |
+| Story generation | 6.3 | 7.1 | 22.2 | 21.9 |
+| **Generation total** | **7.7** | **22.6** | **23.7** | **38.5** |
+| Evaluation (CLIP + NLI + rules; not part of generation) | 0.92 | 1.22 | 1.17 | 1.94 |
+
+Seeing is slower with Florence-2 (three tasks instead of one BLIP call). Length control multiplies story time because of retries.
+Per-image evaluation time varies; the median `eval_total_s` is 0.93 s (normal) and 1.27 s (length-controlled).
+
+### What the results do and do not show
+
+- In both comparisons the improved pipeline has a higher mean grounding score, higher CLIP similarity and lower NLI contradiction.
+  Both were measured on 8 images in a single run, with an untuned threshold, so the sizes are indicative only.
+- The normal-mode pass rate (0/8 -> 1/8) mostly reflects length: only 1/8 improved stories are 80-120 words.
+- Under length control, the pass rate does not change (5/8 vs 5/8), and 3 of 8 images regress.
+- Repetition is higher for the improved pipeline in the normal run (0.0034 -> 0.0187) and lower in the length-controlled run (0.0068 -> 0.0034).
+  Repeated trigrams are rare in absolute terms, so this is not a finding.
+- The gain depends on how the context is formatted: the same Florence-2 model gave different gains in earlier versions of the context
+  builder (table below). With 8 images and one run this cannot be separated from run-to-run variation.
+
+### Result files
+
+| Result file | Mean grounding (baseline -> improved) | Grounding pass | Length valid |
+|---|---|---|---|
+| `results_final.csv` (FINAL, normal) | 0.783 -> 0.856 (+0.072) | 0/8 -> 1/8 | 0/8 -> 1/8 |
+| `results_final_fixlen.csv` (FINAL, length-controlled) | 0.756 -> 0.827 (+0.070) | 5/8 -> 5/8 | 6/8 -> 6/8 |
+| `results_new.csv` (historical: earlier structured version, normal) | 0.783 -> 0.866 (+0.083) | 0/8 -> 2/8 | 0/8 -> 2/8 |
+| `results_fixlen_new.csv` (historical: earlier structured version, length-controlled) | 0.756 -> 0.789 (+0.032) | 5/8 -> 4/8 | 6/8 -> 6/8 |
+| `results.csv` (historical: earlier simple pipeline, normal) | 0.783 -> 0.845 (+0.062) | 0/8 -> 3/8 | 0/8 -> 3/8 |
+| `results_fixlen.csv` (historical: earlier simple pipeline, length-controlled) | 0.756 -> 0.837 (+0.080) | 5/8 -> 5/8 | 6/8 -> 5/8 |
+
+Historical rows come from earlier code (an earlier simple context, and a context builder that used an object whitelist) and from an earlier
+metric version, so they are not comparable with the final rows and are kept only as evidence of how the earlier numbers were produced.
+
+## Failure cases and regressions
+
+- **`thumb-chihiro001.png` (regressed in both modes):** the structured context contains both "girl" and "boy" for the same figure
+  (`Characters: girl, boy, human`).
+- **`thumb-chihiro004.png` (regressed in both modes):** the characters list contains "dog". It comes from the region caption "man eating hot dog":
+  the keyword matcher in `seeing.py` matched the word "dog" inside "hot dog". This is an extraction artifact, not a detected dog.
+- **`thumb-chihiro006.png` (regressed only in length-controlled mode)** and **`thumb-chihiro007.png` (regressed only in normal mode)**:
+  see the per-image tables above.
+- **Attribute conflicts:** the attribute check fired on 1 of 32 scored rows (`thumb-chihiro002.png`, improved, length-controlled: "red").
+  It contributes almost nothing to these results.
+- **Length:** Qwen2.5-0.5B does not reliably hit 80-120 words; 1/8 (normal) and 6/8 (length-controlled) improved stories are in range.
+
+## Limitations
+
+- The baseline is a stand-in, not the official one.
+- 8 images, one run, greedy decoding with seed 0; the threshold (0.60) and CLIP range are untuned.
+- CLIP is the only image-aware signal; NLI and the attribute check compare the story with generated text, so errors made by the seeing stage
+  propagate into the story and are not penalised by them.
+- Closed vocabularies: character and action keywords in `seeing.py`, colour/material words in `metric.py`, transition words in `metric.py`.
+  Words outside these lists are not recognised, and the "hot dog" artifact above comes from this approach.
+- The attribute check is a word-list heuristic with a typical-colour rule for wood; it can raise false alarms and misses most conflicts.
+- Continuity is an overlap-and-lexicon proxy, not a measure of narrative coherence. Generic recurring labels (for example "person") count like any other.
+- Components of the improved seeing stage were not ablated.
+- No fluency or narrative-quality metric.
+
+## Multi-image story (`--multi`)
+
+All 8 images in filename order, 333 words, frames used: 8, cut-off final sentence removed: True.
+Continuity proxy: recurring entities (11): boy, chair, child, footwear, girl, human, human face, man, person, window, woman; entity_consistency 0.4545;
+transition_markers 0; adjacent_similarity 0.2285.
+These numbers describe lexical overlap only. The story itself is in `combined_story.json`. It still invents a named character ("Leo") and relatives that no frame shows,
+and covers the frames unevenly; a 0.5B model cannot hold a long sequence prompt, so treat it as a demonstration, not as evidence of coherence.
 
 ## Installation
 
-### Requirements
-* Python 3.10+
-* Windows / Linux / macOS (tested on Windows 11, CPU-only)
-* ~8 GB RAM for model weights
+Python 3.10+ (tested on Python 3.13, Windows 11, CPU only, about 8 GB RAM for the model weights).
 
-### Setup
-```bash
-# Clone and install
-git clone <this-repo>
-cd image-to-story
-pip install -r requirements.txt
-
-# Download models (one-time, needs internet)
-python download_models.py
-```
-
-### Offline Configuration
 ```powershell
-# PowerShell
-$env:HF_HUB_OFFLINE = "1"
-$env:TRANSFORMERS_OFFLINE = "1"
+pip install -r requirements.txt
+python download_models.py        # once, needs internet
 ```
 
-```bash
-# bash / zsh
-export HF_HUB_OFFLINE=1
-export TRANSFORMERS_OFFLINE=1
-```
+Models: `Salesforce/blip-image-captioning-base`, `Qwen/Qwen2.5-0.5B-Instruct`, `florence-community/Florence-2-base`,
+`openai/clip-vit-base-patch32`, `cross-encoder/nli-MiniLM2-L6-H768`.
 
----
+### Offline mode and cache location
+
+The code sets `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1`; nothing needs the internet at inference time. It respects an existing
+`HF_HOME`; otherwise Hugging Face's normal cache location is used. A custom cache is optional, for example:
+
+```powershell
+$env:HF_HOME = "D:\AI-Models\huggingface"   # optional; not required
+```
 
 ## Usage
 
-### CLI Options (`main.py`)
+```powershell
+python main.py images/ --both --output results_final.csv --vision-json vision_final.json     # normal comparison
+python main.py images/ --both --fix-length --output results_final_fixlen.csv --vision-json vision_final_fixlen.json
+python main.py images/ --multi                      # one story across all images -> combined_story.json
+python main.py images/ --baseline | --improved      # one pipeline only, printed
+python metric.py                                    # self-test with synthetic strings -> selftest.csv
+```
+
+Defaults: `--output results.csv`, `--vision-json vision.json`, `--multi-output combined_story.json`. **`results.csv` is also a historical result file in this
+repository, so always pass `--output` when you do not want to overwrite it.** A failing image is recorded with `status=error` and an error message,
+gets no metric values, and is excluded from the means; the run prints successful and failed evaluation counts.
 
 | Flag | Description |
-|------|-------------|
-| `--baseline` | Run BLIP -> Qwen pipeline only |
-| `--improved` | Run Florence-2 -> Qwen pipeline only |
-| `--both` | Run both and compare (default if no mode flag) |
-| `--multi` | Generate single story across all input images |
-| `--fix-length` | Enforce 80-120 word limit with retries |
-| `--output FILE` | Output CSV path (default: `results.csv`) |
-| `--vision-json FILE` | Output vision JSON path (default: `vision.json`) |
+|---|---|
+| `--baseline`, `--improved`, `--both` | Pipelines to run (`--both` is the default) |
+| `--multi` | One story across all images in filename order, with the continuity proxy |
+| `--fix-length` | Length-controlled generation (not used by `--multi`) |
+| `--output FILE`, `--vision-json FILE`, `--multi-output FILE` | Output paths |
 
-### Commands
+## Testing
 
-**Full comparison (baseline vs improved):**
 ```powershell
-python main.py images/ --both --output results.csv
+python test_pipeline.py            # 24 unit tests, no model inference
+python test_pipeline.py --models   # plus 2 model-dependent tests (CLIP/NLI scoring, Florence-2 vision)
+pytest -q                          # 24 passed, 2 skipped (model-dependent tests skipped unless --models or RUN_MODEL_TESTS=1)
 ```
 
-**Length-equalised comparison:**
-```powershell
-python main.py images/ --both --fix-length --output results_fixlen.csv
-```
+Importing `metric` loads CLIP and the NLI model from the local cache, so the cache must exist. The unit tests call production code:
+the grounding formula helper, the grounding-pass rule, the 79/80/120/121 word-count boundaries, the attribute check (including the "white cabinets" vs "oak cabinet"
+challenge example), repetition, continuity (including "recurring means at least two frames" and "not applicable for one image"), the context builder, image discovery,
+CSV writing, error rows, summaries, `--vision-json` handling, and configuration.
 
-**Improved pipeline only:**
-```powershell
-python main.py images/ --improved
-```
+## Reproducing the results
 
-**Multi-image continuous story:**
 ```powershell
+$env:HF_HUB_OFFLINE = "1"; $env:TRANSFORMERS_OFFLINE = "1"
+python main.py images/ --both --output results_final.csv --vision-json vision_final.json
+python main.py images/ --both --fix-length --output results_final_fixlen.csv --vision-json vision_final_fixlen.json
 python main.py images/ --multi
-```
-
----
-
-## Evaluation Commands
-
-```bash
-# Self-test with synthetic strings (verifies metrics work)
 python metric.py
-
-# Run lightweight test suite (11 tests)
-python test_pipeline.py
+python test_pipeline.py --models
 ```
 
-**Test coverage:** word-count validation, grounding calculation, repetition detection, continuity scoring, attribute conflict detection, context builder (single + sequence), JSON schema validation, CSV I/O, error handling, reproducibility config.
+Greedy decoding with a fixed seed makes the stories repeatable on the same machine; runtimes vary between runs.
 
----
-
-## Project Structure
+## Project structure
 
 ```text
-.
-├── main.py                      # Unified CLI entry point
-├── seeing.py                    # Florence-2 vision stage (3 tasks)
-├── context_builder.py           # Deterministic context construction
-├── metric.py                    # Evaluation: CLIP, NLI, repetition, continuity, runtime
-├── baseline.py                  # BLIP baseline + shared Qwen story generator
-├── test_pipeline.py             # 11 lightweight unit/integration tests
-├── download_models.py           # One-time model downloader
-├── experiments.md               # Full experiment write-up
-├── results_new.csv              # 8-image comparison results
-├── results_new_vision.json      # Structured vision output for all images
-├── combined_story.json          # Multi-image story output
-├── requirements.txt             # Pinned dependencies
-└── README.md                    # This file
+main.py              CLI: --baseline / --improved / --both / --multi / --fix-length
+baseline.py          BLIP baseline and the shared Qwen story generator (length rule, length-controlled mode)
+seeing.py            Florence-2 seeing stage -> structured vision JSON
+context_builder.py   deterministic context and sequence-context builder, entity helpers
+metric.py            grounding score, repetition, attribute check, continuity proxy, runtime
+test_pipeline.py     unit and optional model-dependent tests
+download_models.py   one-time model download
+experiments.md       experiment write-up
+images/              the 8 evaluation frames
+results_final*.csv, vision_final*.json, combined_story.json, selftest.csv   final artifacts
+results*.csv, results_*_vision.json, stories.json                           historical runs
 ```
 
----
+## Visual examples
 
-## Reproducibility
+Stories below are copied programmatically from `results_final.csv` (normal run) and are not edited.
 
-* **Same images** used for baseline and improved runs (8 frames from *Spirited Away*)
-* **Local models** -- no external API calls at inference time
-* **Deterministic generation** -- greedy decoding, fixed seed (`SEED = 0`), `repetition_penalty=1.05`
-* **Model versions pinned** in `requirements.txt` and `download_models.py`
-* **Python 3.13**, `torch 2.13.0`, `transformers 5.15.0`, CPU-only
-* **Offline verification** -- `HF_HUB_OFFLINE=1` works end-to-end after download
+### 1. chihiro003.jpg
 
-### Commands
+<p align="center"><img src="images/chihiro003.jpg" alt="chihiro003.jpg" width="360"/></p>
 
-```powershell
-# One-time setup (needs internet)
-pip install -r requirements.txt
-python download_models.py
+| Pipeline | Grounding | Words | Story |
+|---|---|---|---|
+| Baseline (BLIP) | 0.740 | 71 | A man steps out onto the bustling street, his footsteps echoing through the concrete. He's dressed in a casual yet stylish outfit, a pair of jeans and a t-shirt that shows off his muscular build. The sun is shining brightly, casting a warm glow over the cityscape below. The man's eyes are fixed on the sidewalk, looking for something to grab. He's walking slowly, taking his time to enjoy the moment. |
+| Improved (Florence-2) | 0.856 | 99 | In the heart of a bustling European city, a vibrant street scene unfolded. Children played joyfully under the twinkling Christmas lights, their laughter echoing through the air. A man, dressed in a festive attire, walked down the street, his eyes sparkling with excitement. He stopped at a colorful building with its windows adorned with festive decorations, which he admired with a sense of pride. As he continued, he passed by another building with its windows filled with red lanterns, creating a festive atmosphere. The street was alive with the sounds of children's laughter and the cheerful chatter of neighbors. |
 
-# Offline runs (PowerShell)
-$env:HF_HUB_OFFLINE = "1"
-$env:TRANSFORMERS_OFFLINE = "1"
+### 2. thumb-chihiro001.png
 
-# Full comparison (baseline vs improved) on all 8 images
-python main.py images/ --both --output results_new.csv
+<p align="center"><img src="images/thumb-chihiro001.png" alt="thumb-chihiro001.png" width="360"/></p>
 
-# Length-equalised comparison
-python main.py images/ --both --fix-length --output results_fixlen_new.csv
+| Pipeline | Grounding | Words | Story |
+|---|---|---|---|
+| Baseline (BLIP) | 0.856 | 45 | A girl sat in the back of a car, surrounded by colorful flowers. The sun shone through the window, casting a warm glow on her face. She was lost in thought as she gazed at the vibrant blooms, feeling grateful for the beauty around her. |
+| Improved (Florence-2) | 0.817 | 66 | In the heart of a bustling city, a young girl sat in the back seat of a sleek, modern car, her eyes fixed on the vibrant blooms around her. She held the bouquet in one hand, her fingers tracing the delicate petals with practiced ease. The scene was captured by a camera lens, capturing the essence of a moment that would soon be shared with others. |
 
-# Multi-image story (sequence)
-python main.py images/ --multi
+### 3. thumb-chihiro002.png
 
-# Self-test (synthetic strings)
-python metric.py
-python test_pipeline.py
-```
+<p align="center"><img src="images/thumb-chihiro002.png" alt="thumb-chihiro002.png" width="360"/></p>
 
----
+| Pipeline | Grounding | Words | Story |
+|---|---|---|---|
+| Baseline (BLIP) | 0.644 | 47 | A woman sits alone on a rocky outcropping, gazing out at the car that drives by. The sun sets over the horizon, casting long shadows across the landscape. She takes a deep breath, feeling the cool breeze on her face as she watches the world pass by. |
+| Improved (Florence-2) | 0.911 | 65 | In the heart of the dense forest, a young girl stood beside a large green monster statue, her eyes sparkling with laughter as she gazed at the towering figure. She wore a simple green dress and a pair of sturdy boots, her face a mix of mischief and innocence. The car, its headlights casting long shadows, passed by, its occupants oblivious to the child's presence. |
 
-## Performance
+### 4. thumb-chihiro004.png
 
-| Stage | Baseline (normal) | Improved (normal) | Baseline (fixlen) | Improved (fixlen) |
-|-------|-------------------|-------------------|-------------------|-------------------|
-| Vision (per image) | 4.3 s | 18.1 s | 2.4 s | 17.4 s |
-| Story generation | 9.1 s | 8.8 s | 27.0 s | 24.5 s |
-| **Total (per image)** | **13.4 s** | **27.0 s** | **29.4 s** | **41.9 s** |
+<p align="center"><img src="images/thumb-chihiro004.png" alt="thumb-chihiro004.png" width="360"/></p>
 
-*Measured after model load, on CPU, Windows 11. Florence-2 runs 3 tasks (detailed caption + OD + dense regions) vs BLIP's 1 task. Fixlen multiplies story time ~3× due to retries.*
+| Pipeline | Grounding | Words | Story |
+|---|---|---|---|
+| Baseline (BLIP) | 0.895 | 30 | A man and woman sit at a table, sipping on coffee and savoring their meal. The aroma of freshly baked bread fills the air as they chat about their day. |
+| Improved (Florence-2) | 0.823 | 59 | In the bustling restaurant, the family sat at a table, their faces all focused on their meal. The man, with his golden fur and expressive eyes, was savoring his hot dog. The woman, with her long hair and a mischievous grin, was munching on a red fish. The child, with a curious look, watched them both with wide eyes. |
 
----
+### 5. thumb-chihiro005.png
 
-## Design Decisions
+<p align="center"><img src="images/thumb-chihiro005.png" alt="thumb-chihiro005.png" width="360"/></p>
 
-| Decision | Rationale |
-|----------|-----------|
-| **Structured JSON over large paragraph** | Enables deterministic context building, field-level inspection, and per-field evaluation |
-| **Deterministic context builder** | Reproducible prompts; no ML in the middle; easy to debug |
-| **Local models only** | Offline capability; no API costs; privacy; reproducibility |
-| **CLIP + NLI + deterministic checks** | Complementary signals: semantic similarity, logical consistency, attribute accuracy |
-| **Explicit runtime measurement** | Monotonic timers per stage; load time separated from inference |
-| **Per-image analysis** | Aggregate means hide regressions; table shows exactly which images improved/worsened |
-| **Preserve regression cases** | Honest reporting; failures teach more than averages |
+| Pipeline | Grounding | Words | Story |
+|---|---|---|---|
+| Baseline (BLIP) | 0.722 | 50 | A man in a formal suit and tie stands on a ledge, looking out over a cityscape. The sun glints off his polished leather jacket, casting a warm glow on his face. He takes a deep breath, feeling the tension in his muscles as he prepares to make a statement. |
+| Improved (Florence-2) | 0.841 | 41 | In a serene garden, a young man with green hair stands on a red railing, his eyes fixed on the distant balcony. He holds a small, delicate bird in his hand, its wings fluttering gently as it watches the world below. |
 
----
+### 6. thumb-chihiro006.png
 
-## What This Project Demonstrates
+<p align="center"><img src="images/thumb-chihiro006.png" alt="thumb-chihiro006.png" width="360"/></p>
 
-### Computer Vision
-* Multimodal image understanding
-* Detailed captioning
-* Object detection
-* Dense region captioning
-* Structured scene extraction
+| Pipeline | Grounding | Words | Story |
+|---|---|---|---|
+| Baseline (BLIP) | 0.878 | 58 | A pig, with its long snout and bushy tail, was painting a picture of a man in a field. The pig's eyes were fixed on the figure, his brush strokes soft and gentle. The man's face was serene, his expression calm and composed. The pig's artistry was evident in every stroke, capturing the essence of the man's presence. |
+| Improved (Florence-2) | 0.975 | 66 | In a vibrant world, a pig with a blue shirt stood proudly, its eyes twinkling with mischief. Its green leafy vegetable in its mouth was a sight to behold, a testament to its hearty appetite. The scene was captured by a vibrant cartoon pig with a blue shirt and a green leafy vegetable in its mouth, adding a touch of whimsy to the otherwise mundane scene. |
 
-### Generative AI
-* Local LLM inference (Qwen 0.5B)
-* Context construction from structured data
-* Prompt-driven story generation
+### 7. thumb-chihiro007.png
 
-### LLMOps / Evaluation
-* Reproducible experiments
-* Baseline vs improved comparison
-* Grounding evaluation (CLIP + NLI + attributes)
-* Contradiction analysis
-* Quality metrics (repetition, continuity, length)
-* Runtime measurement
-* Regression analysis
+<p align="center"><img src="images/thumb-chihiro007.png" alt="thumb-chihiro007.png" width="360"/></p>
 
-### Software Engineering
-* CLI with subcommands
-* Deterministic components
-* Validation & error handling
-* Automated tests (11 tests)
-* JSON/CSV artifacts
-* Offline execution
+| Pipeline | Grounding | Words | Story |
+|---|---|---|---|
+| Baseline (BLIP) | 0.787 | 76 | In the dimly lit restaurant, the soft glow of the overhead light bathed the tables in a warm, inviting light. The air was filled with the scent of freshly baked bread and the aroma of steaming coffee. A friendly waiter greeted each patron with a warm smile, and the conversation flowed effortlessly as they sipped their coffee and ate their meals. The atmosphere was cozy and welcoming, perfect for a special occasion or a casual dinner. |
+| Improved (Florence-2) | 0.750 | 52 | In the dimly lit alleyway, a bird perched on a stool, its feathers shimmering under the lantern's soft glow. The bowl sat precariously on the chair, its contents a mix of rice and vegetables, while the stool was occupied by a curious passerby who watched with a mix of curiosity and amusement. |
 
----
+### 8. thumb-chihiro008.png
 
-## Final Takeaway
+<p align="center"><img src="images/thumb-chihiro008.png" alt="thumb-chihiro008.png" width="360"/></p>
 
-**A short image caption can become the information bottleneck for downstream story generation.** Richer structured visual context (detailed caption + object detection + dense regions) improves grounding and reduces contradiction on average. However, errors introduced during visual extraction -- false objects, gender confusion, misclassified scenes -- propagate into the final narrative and can cause regressions on specific images. **Evaluation is essential** to distinguish real improvement from noise.
+| Pipeline | Grounding | Words | Story |
+|---|---|---|---|
+| Baseline (BLIP) | 0.746 | 76 | In the heart of a bustling town, a man sat on a bench, his eyes fixed on a distant dog. The dog, a golden retriever, wagged its tail in greeting. The man's face lit up as he watched the dog play with a toy, its tail swishing back and forth. The dog, in turn, wagged its tail back and forth, its eyes sparkling with joy. The man smiled, feeling grateful for the simple bond between them. |
+| Improved (Florence-2) | 0.873 | 53 | In a dimly lit room, a woman stood before a small red building with a green door and red lights. She held a figure in her arms, which was a man. The scene was set against a dark background, with shadows playing on the walls and the figure's face obscured by a hood. |
 
----
-
-*Image -> Story Challenge -- exploring how visual representation depth affects story grounding in a fully local multimodal pipeline.*
