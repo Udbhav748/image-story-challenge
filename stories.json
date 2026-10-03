@@ -1,0 +1,218 @@
+[
+  {
+    "image": "chihiro003.jpg",
+    "baseline": {
+      "description_given_to_story_model": "a painting of a street scene with a man walking down the street",
+      "story": "A man steps out onto the bustling street, his footsteps echoing through the concrete. He's dressed in a casual yet stylish outfit, a pair of jeans and a t-shirt that shows off his muscular build. The sun is shining brightly, casting a warm glow over the cityscape below. The man's eyes are fixed on the sidewalk, looking for something to grab. He's walking slowly, taking his time to enjoy the moment.",
+      "word_count": 71,
+      "length_valid": false,
+      "grounding_score": 0.74,
+      "grounding_pass": false,
+      "clip_image_story_mean": 0.219,
+      "nli_contradiction_mean": 0.111,
+      "seeing_seconds": 2.55,
+      "story_seconds": 12.29
+    },
+    "improved": {
+      "description_given_to_story_model": "The image is an illustration of a street scene in a European city. The street is lined with colorful buildings, including a green building with a star on the top left corner, a yellow building with arched windows, and a pink building with red lanterns hanging from the roof. There are also several shops and restaurants on the street, including one with a blue awning and another with a yellow awnings. In the center of the image, there is a man and two children walking on the sidewalk. The sky is blue and there are a few clouds in the background. The overall style of the illustration is whimsical and playful. Objects visible: building, house, window.",
+      "story": "In the heart of a European city, a vibrant street scene unfolds. The streets are lined with colorful buildings, each adorned with a unique design. A green building stands at the top left, its topmost window adorned with a star. A yellow building has arches that frame its windows, while a pink building with red lanterns hangs from its roof. Beside it, a blue awning shelters a man and his two children as they stroll along the sidewalk. The sky above is a deep blue, and the clouds stretch out below, adding to the whimsical atmosphere.",
+      "word_count": 96,
+      "length_valid": true,
+      "grounding_score": 0.887,
+      "grounding_pass": true,
+      "clip_image_story_mean": 0.259,
+      "nli_contradiction_mean": 0.005,
+      "seeing_seconds": 17.41,
+      "story_seconds": 14.16
+    }
+  },
+  {
+    "image": "thumb-chihiro001.png",
+    "baseline": {
+      "description_given_to_story_model": "a girl sitting in the back of a car with a bunch of flowers",
+      "story": "A girl sat in the back of a car, surrounded by colorful flowers. The sun shone through the window, casting a warm glow on her face. She was lost in thought as she gazed at the vibrant blooms, feeling grateful for the beauty around her.",
+      "word_count": 45,
+      "length_valid": false,
+      "grounding_score": 0.856,
+      "grounding_pass": false,
+      "clip_image_story_mean": 0.247,
+      "nli_contradiction_mean": 0.008,
+      "seeing_seconds": 3.55,
+      "story_seconds": 9.25
+    },
+    "improved": {
+      "description_given_to_story_model": "The image shows a young boy sitting in the back seat of a car. He is wearing a green and red striped shirt, red shorts, and white sneakers. He has brown hair and is holding a pink flower in his hand. The car has a blue Adidas bag on the left side and a cardboard box on the right side. There are also some items scattered around the car, including a pink bunny and a blue bag with the word \"KINOKUKU\" written on it. The background shows a green lawn and trees. The boy appears to be relaxed and enjoying his time in the car. Objects visible: footwear, human face, person.",
+      "story": "The young boy sat in the back seat of the car, his eyes fixed on the colorful items scattered around him. He was wearing a green and red striped shirt, red shorts, and white sneakers. His brown hair was tied into a ponytail, and he held a pink flower in his hand. The car had a blue Adidas bag on the left side and a cardboard box on the right side. There were also some items scattered around the car, including a pink bunny and a blue bag with the word \"KINOKUKU\" written on it. The background showed a green lawn and trees. The boy appeared to be relaxed and enjoying his time in the car.",
+      "word_count": 116,
+      "length_valid": true,
+      "grounding_score": 0.864,
+      "grounding_pass": true,
+      "clip_image_story_mean": 0.252,
+      "nli_contradiction_mean": 0.016,
+      "seeing_seconds": 17.12,
+      "story_seconds": 24.23
+    }
+  },
+  {
+    "image": "thumb-chihiro002.png",
+    "baseline": {
+      "description_given_to_story_model": "a woman sitting on a rock next to a car",
+      "story": "A woman sits alone on a rocky outcropping, gazing out at the car that drives by. The sun sets over the horizon, casting long shadows across the landscape. She takes a deep breath, feeling the cool breeze on her face as she watches the world pass by.",
+      "word_count": 47,
+      "length_valid": false,
+      "grounding_score": 0.644,
+      "grounding_pass": false,
+      "clip_image_story_mean": 0.209,
+      "nli_contradiction_mean": 0.287,
+      "seeing_seconds": 2.15,
+      "story_seconds": 7.11
+    },
+    "improved": {
+      "description_given_to_story_model": "The image shows a young girl standing next to a large green monster statue in a forest. The monster is standing on its hind legs with its mouth open and tongue sticking out, as if it is laughing. The girl is wearing a green and white striped shirt, red shorts, and yellow shoes. She has brown hair and is looking at the monster with a sad expression. Behind the monster, there is a black car parked on the side of the road. The trees and bushes surrounding the car are tall and green, and the ground is covered in fallen leaves. Objects visible: car, footwear, human face, person.",
+      "story": "In the heart of a dense forest, a young girl stood beside a large green monster statue. The monster, standing on its hind legs with its mouth open and tongue sticking out, appeared to be laughing. The girl wore a green and white striped shirt, red shorts, and yellow shoes. Her brown hair was tied back in a messy bun, and she looked down at the monster with a sad expression. Behind the monster, a black car parked on the side of the road. The trees and bushes surrounding the car were tall and green, and the ground was covered in fallen leaves.",
+      "word_count": 103,
+      "length_valid": true,
+      "grounding_score": 0.776,
+      "grounding_pass": true,
+      "clip_image_story_mean": 0.261,
+      "nli_contradiction_mean": 0.297,
+      "seeing_seconds": 17.97,
+      "story_seconds": 15.71
+    }
+  },
+  {
+    "image": "thumb-chihiro004.png",
+    "baseline": {
+      "description_given_to_story_model": "a man and woman sitting at a table eating food",
+      "story": "A man and woman sit at a table, sipping on coffee and savoring their meal. The aroma of freshly baked bread fills the air as they chat about their day.",
+      "word_count": 30,
+      "length_valid": false,
+      "grounding_score": 0.895,
+      "grounding_pass": false,
+      "clip_image_story_mean": 0.264,
+      "nli_contradiction_mean": 0.018,
+      "seeing_seconds": 2.08,
+      "story_seconds": 4.43
+    },
+    "improved": {
+      "description_given_to_story_model": "The image shows a family of three - a man, a woman and a child - sitting at a table in a restaurant. The man is on the right side of the image, wearing a blue shirt and holding a hot dog in his mouth. He is eating a meal with chopsticks. The woman is sitting on the left side, holding a red bowl and appears to be eating it. The child is standing in the background, looking at the man and the food. The table is covered with plates of food, including a large piece of meat, a plate of fries, and a small bowl of sauce. The restaurant has a wooden floor and a wooden wall with a",
+      "story": "The family sat at a wooden table in a restaurant, enjoying a meal filled with hot dogs, fries, and a bowl of sauce. The man was holding a hot dog in his mouth, while the woman was eating her meal with chopsticks. The child stood nearby, looking at the man and the food. The wooden floor and wooden wall added a touch of rustic charm to the scene.",
+      "word_count": 68,
+      "length_valid": false,
+      "grounding_score": 0.786,
+      "grounding_pass": false,
+      "clip_image_story_mean": 0.269,
+      "nli_contradiction_mean": 0.327,
+      "seeing_seconds": 15.52,
+      "story_seconds": 10.59
+    }
+  },
+  {
+    "image": "thumb-chihiro005.png",
+    "baseline": {
+      "description_given_to_story_model": "a man in a suit and tie is standing on a ledge",
+      "story": "A man in a formal suit and tie stands on a ledge, looking out over a cityscape. The sun glints off his polished leather jacket, casting a warm glow on his face. He takes a deep breath, feeling the tension in his muscles as he prepares to make a statement.",
+      "word_count": 50,
+      "length_valid": false,
+      "grounding_score": 0.722,
+      "grounding_pass": false,
+      "clip_image_story_mean": 0.203,
+      "nli_contradiction_mean": 0.05,
+      "seeing_seconds": 1.8,
+      "story_seconds": 6.73
+    },
+    "improved": {
+      "description_given_to_story_model": "The image shows a young boy with green hair, wearing a blue shirt and a purple belt, standing on a balcony overlooking a body of water. He is holding a small object in his hand and appears to be looking out at the horizon. The sky is dark and cloudy, and there are a few white birds flying in the air around him. The water is calm and there is a red railing in the foreground. The overall mood of the image is peaceful and serene. Objects visible: human face, person.",
+      "story": "The young boy stood on a balcony overlooking a body of water, holding a small object in his hand. The sky was dark and cloudy, and there were a few white birds flying in the air around him. The water was calm and there was a red railing in the foreground. The overall mood of the image was peaceful and serene.",
+      "word_count": 61,
+      "length_valid": false,
+      "grounding_score": 0.804,
+      "grounding_pass": false,
+      "clip_image_story_mean": 0.227,
+      "nli_contradiction_mean": 0.002,
+      "seeing_seconds": 14.41,
+      "story_seconds": 9.24
+    }
+  },
+  {
+    "image": "thumb-chihiro006.png",
+    "baseline": {
+      "description_given_to_story_model": "a pig is painting a picture of a man",
+      "story": "A pig, with its long snout and bushy tail, was painting a picture of a man in a field. The pig's eyes were fixed on the figure, his brush strokes soft and gentle. The man's face was serene, his expression calm and composed. The pig's artistry was evident in every stroke, capturing the essence of the man's presence.",
+      "word_count": 58,
+      "length_valid": false,
+      "grounding_score": 0.878,
+      "grounding_pass": false,
+      "clip_image_story_mean": 0.263,
+      "nli_contradiction_mean": 0.057,
+      "seeing_seconds": 1.67,
+      "story_seconds": 8.51
+    },
+    "improved": {
+      "description_given_to_story_model": "The image is an illustration of a pig wearing a blue shirt. The pig is standing in a kitchen with a countertop and a window in the background. It has a big smile on its face and is holding a plate of food in its mouth. The food appears to be a variety of dishes, including meat, vegetables, and sauces. The colors are bright and vibrant, with shades of pink, orange, and yellow. The overall mood of the image is cheerful and playful. Objects visible: pig.",
+      "story": "The pig, wearing a blue shirt, stood in a kitchen with a countertop and a window in the background. Its big smile was evident as it held a plate of food in its mouth. The food appeared to be a variety of dishes, including meat, vegetables, and sauces. The colors were bright and vibrant, with shades of pink, orange, and yellow. The overall mood of the image was cheerful and playful.",
+      "word_count": 71,
+      "length_valid": false,
+      "grounding_score": 0.844,
+      "grounding_pass": false,
+      "clip_image_story_mean": 0.242,
+      "nli_contradiction_mean": 0.001,
+      "seeing_seconds": 11.86,
+      "story_seconds": 11.73
+    }
+  },
+  {
+    "image": "thumb-chihiro007.png",
+    "baseline": {
+      "description_given_to_story_model": "a restaurant with a table and chairs",
+      "story": "In the dimly lit restaurant, the soft glow of the overhead light bathed the tables in a warm, inviting light. The air was filled with the scent of freshly baked bread and the aroma of steaming coffee. A friendly waiter greeted each patron with a warm smile, and the conversation flowed effortlessly as they sipped their coffee and ate their meals. The atmosphere was cozy and welcoming, perfect for a special occasion or a casual dinner.",
+      "word_count": 76,
+      "length_valid": false,
+      "grounding_score": 0.787,
+      "grounding_pass": false,
+      "clip_image_story_mean": 0.249,
+      "nli_contradiction_mean": 0.191,
+      "seeing_seconds": 1.76,
+      "story_seconds": 10.83
+    },
+    "improved": {
+      "description_given_to_story_model": "The image shows the entrance of a Chinese restaurant. The entrance is decorated with colorful stained glass windows on both sides. Above the entrance, there are red lanterns hanging from the ceiling. The lanterns are in the shape of Chinese characters and are lit up with red lantern lights. In front of the entrance is a counter with a blue and white checkered tablecloth and a bowl of food on it. There are four small wooden stools in front of it. The background is a wall with a mural of a bird and other objects. The overall atmosphere of the image is festive and lively. Objects visible: bowl, chair, lantern, stool.",
+      "story": "In the heart of the bustling city, a vibrant Chinese restaurant stood as a beacon of warmth and joy. The entrance was adorned with intricate stained glass windows that shimmered with colors of red and gold, each window depicting scenes of prosperity and good fortune. Above the entrance, red lanterns hung from the ceiling, casting a warm glow over the entire space. The lanterns were intricately carved with Chinese characters, each one a symbol of hope and prosperity. In front of the entrance, a cozy counter with a blue and white checkered tablecloth and a bowl of food sat invitingly. Four small wooden stools stood in front of it, their backs facing the entrance, ready to serve customers. The background was a vibrant mural of a bird and other objects, adding a touch of whimsy and color to the otherwise serene scene. The overall atmosphere was festive and lively, with the aroma of hot food wafting through the air, mingling with the sweet scent of freshly baked bread and the sound",
+      "word_count": 171,
+      "length_valid": false,
+      "grounding_score": 0.87,
+      "grounding_pass": false,
+      "clip_image_story_mean": 0.255,
+      "nli_contradiction_mean": 0.029,
+      "seeing_seconds": 14.98,
+      "story_seconds": 24.55
+    }
+  },
+  {
+    "image": "thumb-chihiro008.png",
+    "baseline": {
+      "description_given_to_story_model": "a scene of a town with a man and a dog",
+      "story": "In the heart of a bustling town, a man sat on a bench, his eyes fixed on a distant dog. The dog, a golden retriever, wagged its tail in greeting. The man's face lit up as he watched the dog play with a toy, its tail swishing back and forth. The dog, in turn, wagged its tail back and forth, its eyes sparkling with joy. The man smiled, feeling grateful for the simple bond between them.",
+      "word_count": 76,
+      "length_valid": false,
+      "grounding_score": 0.746,
+      "grounding_pass": false,
+      "clip_image_story_mean": 0.213,
+      "nli_contradiction_mean": 0.059,
+      "seeing_seconds": 1.91,
+      "story_seconds": 10.25
+    },
+    "improved": {
+      "description_given_to_story_model": "The image is a screenshot from a video game. It shows a scene from a small town at night. The town is lit up with red lights and there are several buildings with arched windows and doors. The buildings are decorated with various patterns and designs. In the center of the image, there is a small figure of a person standing in front of a doorway with a sign that reads \"Welcome to the town\". The person is wearing a white shirt and blue jeans and is holding a sword in their right hand. On the right side of the screen, there are two other figures, one of which appears to be a woman with long dark hair and a",
+      "story": "In the small town at night, lit by red lights, a figure stands before a doorway adorned with colorful patterns and designs. The person, wearing a white shirt and blue jeans, holds a sword in their right hand. Two other figures appear on the right side of the screen, one of whom is a woman with long dark hair and a mysterious expression.",
+      "word_count": 63,
+      "length_valid": false,
+      "grounding_score": 0.929,
+      "grounding_pass": false,
+      "clip_image_story_mean": 0.274,
+      "nli_contradiction_mean": 0.005,
+      "seeing_seconds": 14.04,
+      "story_seconds": 10.94
+    }
+  }
+]
