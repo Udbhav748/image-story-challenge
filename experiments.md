@@ -21,7 +21,7 @@ story generation. The story model hallucinates details to fill the gaps, produci
 
 **Pipeline B (improved):** `Image → Florence-2 (detailed caption + OD + dense regions) → structured JSON → context builder → Qwen2.5-0.5B-Instruct → story`
 
-- Single Model 7 change: replace BLIP with Florence-2-base for richer visual extraction
+- Module 7 change: replace BLIP with Florence-2-base for richer visual extraction (plus supporting pieces added in the same pass: dense region captions, a structured JSON and a deterministic context builder; see "Change" below)
 - Structured output: scene, description, objects, characters, actions, relationships, OCR, spatial, style/mood, region descriptions
 - Deterministic context builder converts structured JSON → concise LLM prompt
 - Same Qwen model, same prompt template, same decoding settings
@@ -44,7 +44,11 @@ will:
 - Improve CLIP image-story similarity and reduce NLI contradiction
 - Enable continuity by making recurring entities explicit in the structured context
 
-## Change (Module 7 — Single Substantive Change)
+## Change (Module 7)
+
+**Scope note.** The core change is to the seeing stage: Florence-2-base replaces BLIP. In the same pass, three supporting
+pieces were added: dense region captions, a structured JSON, and a deterministic context builder. They were **not ablated**
+(never run one at a time), so the measured gain below cannot be attributed to any single one of them.
 
 **Replace BLIP captioner with Florence-2-base using three tasks:**
 1. `<MORE_DETAILED_CAPTION>` — paragraph-level scene description
@@ -139,8 +143,27 @@ chihiro003.jpg: 0.805 | thumb-chihiro001.png: 0.817 | thumb-chihiro002.png: 0.88
 | Mean story time (s) | 9.1 | 8.8 | −0.3 |
 | Mean total time (s) | 13.4 | 27.0 | +13.6 |
 
-**Grounding score improved on 6 of 8 images.** Largest gains: thumb-chihiro002.png (+0.239), thumb-chihiro008.png (+0.230), thumb-chihiro005.png (+0.121), thumb-chihiro007.png (+0.120).  
-**Regressed on 2 images:** thumb-chihiro001.png (−0.039), thumb-chihiro004.png (−0.061), thumb-chihiro006.png (−0.014).
+**Grounding score improved on 5 of 8 images.** Largest gains: thumb-chihiro002.png (+0.239), thumb-chihiro008.png (+0.230), thumb-chihiro005.png (+0.121), thumb-chihiro007.png (+0.120), chihiro003.jpg (+0.065).  
+**Regressed on 3 images:** thumb-chihiro001.png (−0.039), thumb-chihiro004.png (−0.061), thumb-chihiro006.png (−0.014).  
+(Counts checked against `results_new.csv`.)
+
+**The pass-rate gain is mostly a length effect.** Grounding pass requires 80–120 words, so "0/8 → 2/8" says little about
+grounding; see the length-equalised check below.
+
+## Length-equalised check (earlier run, simpler pipeline)
+
+Run before the structured-context version existed (Florence-2 detailed caption + object labels only, no dense regions or context
+builder), with one length/cut-off fix applied to the shared Qwen stage of **both** pipelines (`results_fixlen.csv`):
+
+| | Baseline | Improved |
+|---|---|---|
+| Mean grounding score | 0.756 | 0.837 |
+| Mean NLI contradiction | 0.207 | 0.103 |
+| Length valid | 6/8 | 5/8 |
+| Grounding pass | 5/8 | 5/8 |
+
+With length equalised the **pass counts tie (5/8 vs 5/8)**, while the grounding-score gain remains (+0.08). This check has **not**
+been repeated for the current structured-context pipeline, so treat the "+2 passes" above as a length effect until it is.
 
 ## Runtime
 
@@ -169,7 +192,7 @@ Seeing is ~4.2× slower with Florence-2 (3 tasks vs 1). Story time similar. Tota
 
 ## Limitations
 
-1. **Length control still broken.** 6/8 improved stories outside 80–120 (36, 53, 61, 66, 75, 118). Qwen 0.5B cannot reliably hit word count. `--fix-length` retries help but multiply runtime.
+1. **Length control still broken.** 6/8 improved stories outside 80–120 (36, 47, 53, 61, 66, 75 words; only 80 and 118 are valid). Qwen 0.5B cannot reliably hit word count. `--fix-length` retries help but multiply runtime.
 2. **NLI compares story to caption/context, not image.** Favors improved pipeline (its context is richer). Only CLIP is image-aware; gain is small (+0.025).
 3. **Florence-2 makes its own errors.** `thumb-chihiro001.png`: dense regions say both "girl" and "boy". `thumb-chihiro004.png`: dense regions add "dog" not in image. `thumb-chihiro008.png`: calls frame "video game screenshot" and adds sword.
 4. **Continuity metrics not discriminative.** Entity consistency = 1.0 for both (recurring entities: person, building — trivial). Transition markers = 0 (Qwen doesn't use them). Adjacent similarity = 1.0 (entity sets overlap heavily). Need better continuity signal.
@@ -180,7 +203,7 @@ Seeing is ~4.2× slower with Florence-2 (3 tasks vs 1). Story time similar. Tota
 
 ## Finding
 
-**Florence-2's structured visual extraction (detailed caption + OD + dense regions) raises grounding score by +0.083 and halves NLI contradiction, but 2/8 images regress due to Florence-2's own mispredictions (false "dog", gender confusion). The single-sentence BLIP bottleneck is real; the fix works on net, but the small Qwen model remains the weak link for length control and multi-frame coherence.**
+**Florence-2's structured visual extraction (detailed caption + OD + dense regions) raises grounding score by +0.083 and halves NLI contradiction, but 3/8 images regress (001, 004, 006), at least two of them due to Florence-2's own mispredictions (false "dog", gender confusion). The single-sentence BLIP bottleneck is real; the fix works on net, but the small Qwen model remains the weak link for length control and multi-frame coherence.**
 
 ## Reproducibility
 
