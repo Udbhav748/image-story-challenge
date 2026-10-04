@@ -1,0 +1,206 @@
+"""Claim extraction and verification for story evaluation."""
+import re
+from typing import Any
+
+from ..domain.schemas import StoryClaim, StoryDraft, EvidenceRecord, VerificationResult
+from ..domain.enums import ClaimStatus, InformationClass
+from ..vision.verifier import VisualVerifier
+
+
+class ClaimExtractor:
+    """Extract verifiable claims from generated story."""
+    
+    def __init__(self):
+        self._nlp = None
+    
+    def _load_nlp(self):
+        if self._nlp is None:
+            try:
+                import spacy
+                self._nlp = spacy.load("en_core_web_sm")
+            except Exception:
+                self._nlp = "fallback"
+    
+    def extract_claims(self, story: StoryDraft, context: str = "") -> list[StoryClaim]:
+        """Extract claims from story text."""
+        self._load_nlp()
+        
+        claims = []
+        sentences = self._split_sentences(story.text)
+        
+        for i, sentence in enumerate(sentences):
+            sentence_claims = self._extract_claims_from_sentence(sentence, i)
+            claims.extend(sentence_claims)
+        
+        return claims
+    
+    def _split_sentences(self, text: str) -> list[str]:
+        return [s.strip() for s in re.split(r"(?<=[.!?])\s+", text.strip()) if s.strip()]
+    
+    def _extract_claims_from_sentence(self, sentence: str, sent_idx: int) -> list[StoryClaim]:
+        claims = []
+        
+        if self._nlp and self._nlp != "fallback":
+            doc = self._nlp(sentence)
+            for token in doc:
+                if token.dep_ == "ROOT" and token.pos_ == "VERB":
+                    subject = self._find_subject(token)
+                    obj = self._find_object(token)
+                    if subject and obj:
+                        claim = StoryClaim(
+                            subject=subject.text,
+                            relation=token.lemma_,
+                            object=obj.text,
+                            original_sentence=sentence,
+                            claim_type=self._classify_claim_type(sentence, subject.text, obj.text),
+                            confidence=0.8,
+                        )
+                        claims.append(claim)
+        else:
+            claims.extend(self._fallback_extract(sentence))
+        
+        return claims
+    
+    def _find_subject(self, verb_token) -> Any:
+        for child in verb_token.children:
+            if child.dep_ in ("nsubj", "nsubjpass"):
+                return child
+        return None
+    
+    def _find_object(self, verb_token) -> Any:
+        for child in verb_token.children:
+            if child.dep_ in ("dobj", "pobj", "attr"):
+                return child
+        return None
+    
+    def _classify_claim_type(self, sentence: str, subject: str, obj: str) -> InformationClass:
+        creative_markers = [
+            "seemed", "appeared", "felt", "thought", "wondered", "imagined",
+            "perhaps", "maybe", "possibly", "might", "could be",
+            "personality", "motivation", "dream", "hope", "fear",
+            "funny", "awkward", "surprisingly", "ironically",
+        ]
+        
+        sentence_lower = sentence.lower()
+        if any(marker in sentence_lower for marker in creative_markers):
+            return InformationClass.CREATIVE_SPACE
+        
+        visual_words = ["wearing", "holding", "standing", "sitting", "walking", "carrying",
+                       "red", "blue", "green", "large", "small", "next to", "in front of"]
+        if any(word in sentence_lower for word in visual_words):
+            return InformationClass.HARD_FACT
+        
+        return InformationClass.SOFT_INFERENCE
+    
+    def _fallback_extract(self, sentence: str) -> list[StoryClaim]:
+        """Simple regex-based claim extraction fallback."""
+        claims = []
+        
+        patterns = [
+            r"(\w+(?:\s+\w+)*)\s+(?:is|was|are|were)\s+(?:a|an|the)?\s*(\w+(?:\s+\w+)*)",
+            r"(\w+(?:\s+\w+)*)\s+(?:has|have|had)\s+(?:a|an|the)?\s*(\w+(?:\s+\w+)*)",
+            r"(\w+(?:\s+\w+)*)\s+(?:holds?|hold|carries?|carry)\s+(?:a|an|the)?\s*(\w+(?:\s+\w+)*)",
+            r"(\w+(?:\s+\w+)*)\s+(?:stands?|stand|sits?|sit)\s+(?:\w+\s+)*(\w+(?:\s+\w+)*)",
+        ]
+        
+        for pattern in patterns:
+            matches = re.finditer(pattern, sentence, re.IGNORECASE)
+            for match in matches:
+                subject = match.group(1).strip()
+                obj = match.group(2).strip()
+                relation = match.group(0).split(subject)[1].split(obj)[0].strip()
+                
+                claim = StoryClaim(
+                    subject=subject,
+                    relation=relation,
+                    object=obj,
+                    original_sentence=sentence,
+                    claim_type=InformationClass.HARD_FACT,
+                    confidence=0.6,
+                )
+                claims.append(claim)
+        
+        return claims
+
+
+class ClaimVerifier:
+    """Verify claims against visual evidence."""
+    
+    def __init__(self, visual_verifier: VisualVerifier | None = None):
+        self._visual_verifier = visual_verifier
+    
+    def verify_claims(
+        self,
+        claims: list[StoryClaim],
+        image: Any,  # PIL Image
+        evidence_records: list[EvidenceRecord],
+    ) -> list[VerificationResult]:
+        """Verify all claims against visual evidence."""
+        results = []
+        
+        for claim in claims:
+            if self._visual_verifier and image:
+                result = self._visual_verifier.verify_claim(claim, image, evidence_records)
+            else:
+                result = self._textual_verification(claim, evidence_records)
+            results.append(result)
+        
+        return results
+    
+    def _textual_verification(
+        self,
+        claim: StoryClaim,
+        evidence_records: list[EvidenceRecord],
+    ) -> VerificationResult:
+        """Textual verification against evidence records."""
+        supporting = []
+        contradicting = []
+        
+        claim_terms = {
+            claim.subject.lower(),
+            claim.relation.lower(),
+            claim.object.lower(),
+        }
+        
+        for evidence in evidence_records:
+            evidence_text = evidence.evidence_text.lower()
+            evidence_entity = evidence.entity.lower()
+            
+            matches = sum(1 for term in claim_terms if term and term in evidence_text)
+            matches += sum(1 for term in claim_terms if term and term in evidence_entity)
+            
+            if matches >= 2:
+                supporting.append(evidence)
+            elif matches == 1 and evidence.confidence > 0.8:
+                supporting.append(evidence)
+        
+        if contradicting:
+            status = ClaimStatus.CONTRADICTED
+            confidence = 0.9
+        elif supporting:
+            status = ClaimStatus.SUPPORTED
+            confidence = min(0.6 + len(supporting) * 0.1, 0.9)
+        else:
+            status = ClaimStatus.UNSUPPORTED
+            confidence = 0.5
+        
+        return VerificationResult(
+            claim_id=claim.id,
+            claim=claim,
+            status=status.value,
+            supporting_evidence=supporting,
+            contradicting_evidence=contradicting,
+            confidence=confidence,
+            notes=f"Textual verification: {len(supporting)} supporting, {len(contradicting)} contradicting",
+        )
+    
+    def compute_claim_grounding_score(self, results: list[VerificationResult]) -> float:
+        """Compute overall claim grounding score."""
+        if not results:
+            return 0.0
+        
+        supported = sum(1 for r in results if r.status == ClaimStatus.SUPPORTED.value)
+        contradicted = sum(1 for r in results if r.status == ClaimStatus.CONTRADICTED.value)
+        total = len(results)
+        
+        return (supported - contradicted * 0.5) / total
