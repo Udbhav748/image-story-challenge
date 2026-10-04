@@ -43,6 +43,7 @@ class PipelineMode(str, Enum):
     FAST = "fast"
     STANDARD = "standard"
     FULL = "full"
+    BASELINE = "baseline"
 
 
 class VisionTask(str, Enum):

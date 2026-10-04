@@ -119,6 +119,27 @@ class VisualObservations:
     runtime_s: float = 0.0
     model_load_s: float = 0.0
     models_used: list[str] = field(default_factory=list)
+    
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "image_id": self.image_id,
+            "frame_id": self.frame_id,
+            "scene": self.scene,
+            "detailed_caption": self.detailed_caption,
+            "objects": self.objects,
+            "od_labels": self.od_labels,
+            "characters": self.characters,
+            "actions": self.actions,
+            "spatial_relations": self.spatial_relations,
+            "region_descriptions": self.region_descriptions,
+            "style_or_mood": self.style_or_mood,
+            "ocr_text": self.ocr_text,
+            "grounding_detections": self.grounding_detections,
+            "evidence_records": [e.to_dict() for e in self.evidence_records],
+            "runtime_s": self.runtime_s,
+            "model_load_s": self.model_load_s,
+            "models_used": self.models_used,
+        }
 
 
 @dataclass
@@ -201,6 +222,14 @@ class RetrievedEvidence:
     semantic_similarity: float = 0.0
     rank_score: float = 0.0
     rank_factors: dict[str, float] = field(default_factory=dict)
+    
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "record": self.record.to_dict(),
+            "semantic_similarity": self.semantic_similarity,
+            "rank_score": self.rank_score,
+            "rank_factors": self.rank_factors,
+        }
 
 
 @dataclass
@@ -292,6 +321,16 @@ class StoryDraft:
     
     def __post_init__(self):
         self.word_count = len(self.text.split())
+    
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "text": self.text,
+            "story_plan": self.story_plan.to_dict() if self.story_plan else None,
+            "word_count": self.word_count,
+            "generation_time_s": self.generation_time_s,
+            "model_used": self.model_used,
+            "prompt_used": self.prompt_used,
+        }
 
 
 @dataclass
@@ -349,7 +388,10 @@ class EvaluationResult:
     """Comprehensive evaluation results."""
     grounding_score: float = 0.0
     clip_image_story_mean: float = 0.0
+    clip_image_story_min: float = 0.0
+    clip_image_caption: float = 0.0
     nli_contra_mean: float = 0.0
+    nli_contra_max: float = 0.0
     attribute_conflict: list[str] = field(default_factory=list)
     repetition_rate: float = 0.0
     length_valid: bool = False
@@ -376,7 +418,10 @@ class EvaluationResult:
         return {
             "grounding_score": self.grounding_score,
             "clip_image_story_mean": self.clip_image_story_mean,
+            "clip_image_story_min": self.clip_image_story_min,
+            "clip_image_caption": self.clip_image_caption,
             "nli_contra_mean": self.nli_contra_mean,
+            "nli_contra_max": self.nli_contra_max,
             "attribute_conflict": self.attribute_conflict,
             "repetition_rate": self.repetition_rate,
             "length_valid": self.length_valid,
@@ -466,6 +511,25 @@ class PipelineConfig:
                     "metaphor": 0.4,
                 },
             )
+        elif mode == "baseline":
+            return cls(
+                mode="baseline",
+                use_grounding_dino=False,
+                use_ocr=False,
+                use_faiss=False,
+                use_creative_planner=False,
+                use_verification=False,
+                target_story_words=100,
+                creativity_config={
+                    "creativity": 0.3,
+                    "surprise": 0.2,
+                    "humor": 0.2,
+                    "mystery": 0.1,
+                    "emotion": 0.2,
+                    "dialogue": 0.2,
+                    "metaphor": 0.1,
+                },
+            )
         else:
             raise ValueError(f"Unknown mode: {mode}")
     
@@ -543,14 +607,14 @@ class PipelineArtifacts:
         return {
             "run_id": self.run_id,
             "manifest": self.manifest.to_dict(),
-            "observations": [obs.__dict__ for obs in self.observations],
+            "observations": [obs.to_dict() for obs in self.observations],
             "world_state": self.world_state.to_dict() if self.world_state else None,
             "retrieved_evidence": [e.to_dict() for e in self.retrieved_evidence],
             "ranked_evidence": [e.to_dict() for e in self.ranked_evidence],
             "context": self.context,
             "creative_plan": self.creative_plan.to_dict() if self.creative_plan else None,
             "story_plan": self.story_plan.to_dict() if self.story_plan else None,
-            "story_draft": self.story_draft.__dict__ if self.story_draft else None,
+            "story_draft": self.story_draft.to_dict() if self.story_draft else None,
             "claims": [c.to_dict() for c in self.claims],
             "verification_results": [v.to_dict() for v in self.verification_results],
             "evaluation": self.evaluation.to_dict() if self.evaluation else None,

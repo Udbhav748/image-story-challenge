@@ -107,7 +107,7 @@ class GroundingDINOModel(VisionModel):
         results = self._processor.post_process_grounded_object_detection(
             outputs,
             inputs["input_ids"],
-            box_threshold=self._box_threshold,
+            threshold=self._box_threshold,
             text_threshold=self._text_threshold,
             target_sizes=[image.size[::-1]],
         )[0]
