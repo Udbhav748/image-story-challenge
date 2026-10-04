@@ -10,6 +10,7 @@ from ..domain.schemas import (
     VisualObservations,
     RetrievedEvidence,
     EvidenceRecord,
+    PipelineConfig,
 )
 from ..domain.enums import (
     StoryGenre,
@@ -31,6 +32,7 @@ class CreativePlanner:
         self,
         seed: int = 0,
         creativity_config: dict[str, float] | None = None,
+        creative_budget: dict[str, int] | None = None,
         genre: str = "whimsical",
         tone: str = "comedic",
     ):
@@ -45,6 +47,12 @@ class CreativePlanner:
             "dialogue": 0.4,
             "metaphor": 0.3,
         }
+        self._creative_budget = creative_budget or {
+            "max_creative_claims": 6,
+            "max_visual_inventions": 0,
+            "max_soft_inferences": 3,
+            "max_new_named_entities": 0,
+        }
         self._genre = StoryGenre(genre) if isinstance(genre, str) else genre
         self._tone = StoryTone(tone) if isinstance(tone, str) else tone
         
@@ -53,6 +61,146 @@ class CreativePlanner:
         self._conflict_engine = ConflictEngine(seed)
         self._humor_engine = HumorEngine(seed, self._creativity_config.get("humor", 0.5))
         self._surprise_engine = SurpriseEngine(seed, self._creativity_config.get("surprise", 0.6))
+    
+    @classmethod
+    def from_config(cls, config: PipelineConfig, seed: int = 0) -> "CreativePlanner":
+        """Create planner from pipeline config."""
+        return cls(
+            seed=seed,
+            creativity_config=config.creativity_config,
+            creative_budget=config.creative_budget,
+            genre=config.genre,
+            tone=config.tone,
+        )
+    
+    def create_creative_plan(
+        self,
+        world_state: WorldState,
+        observations: list[VisualObservations],
+        ranked_evidence: list[RetrievedEvidence],
+    ) -> CreativePlan:
+        """Create a comprehensive creative plan for the story."""
+        
+        # Extract hard facts and soft inferences from evidence
+        hard_facts = self._extract_hard_facts(ranked_evidence)
+        soft_inferences = self._extract_soft_inferences(ranked_evidence)
+        locked_facts = self._extract_locked_facts(ranked_evidence)
+        
+        # Generate character profiles
+        characters = self._character_system.generate_profiles(
+            world_state, self._genre, self._tone
+        )
+        
+        # Generate central conflict (grounded in evidence)
+        evidence_summary = self._summarize_evidence(ranked_evidence)
+        conflict = self._conflict_engine.generate_conflict(
+            world_state, evidence_summary, self._genre.value
+        )
+        
+        # Generate humor moments (grounded in evidence)
+        humor_moments = self._humor_engine.generate_humor_moments(
+            world_state, conflict, HumorStyle.SITUATIONAL, count=2
+        )
+        
+        # Generate surprise/twist (grounded in evidence)
+        foreshadowing = self._identify_foreshadowing_opportunities(observations, world_state)
+        surprise = self._surprise_engine.generate_surprise(
+            world_state, evidence_summary, foreshadowing
+        )
+        
+        # Identify open loops
+        open_loops = [loop.get("description", "") for loop in world_state.open_loops]
+        
+        # Plan callbacks (using FAISS/world state memory)
+        callback_plan = self._plan_callbacks(observations, world_state)
+        
+        # Design narrative arc
+        narrative_arc = self._design_narrative_arc(conflict, surprise, open_loops)
+        
+        return CreativePlan(
+            genre=self._genre.value,
+            tone=self._tone.value,
+            creativity_level=self._creativity_config.get("creativity", 0.7),
+            surprise_level=self._creativity_config.get("surprise", 0.6),
+            humor_level=self._creativity_config.get("humor", 0.5),
+            mystery_level=self._creativity_config.get("mystery", 0.4),
+            emotion_level=self._creativity_config.get("emotion", 0.5),
+            dialogue_level=self._creativity_config.get("dialogue", 0.4),
+            metaphor_level=self._creativity_config.get("metaphor", 0.3),
+            characters=characters,
+            central_conflict=conflict,
+            open_loops=open_loops,
+            foreshadowing_elements=foreshadowing,
+            callback_plan=callback_plan,
+            narrative_arc=narrative_arc,
+            # New fields for V2.1
+            hard_facts=hard_facts,
+            soft_inferences=soft_inferences,
+            locked_facts=locked_facts,
+            creative_budget=self._creative_budget,
+        )
+    
+    def _extract_hard_facts(self, ranked_evidence: list[RetrievedEvidence]) -> list[str]:
+        """Extract hard visual facts from ranked evidence."""
+        facts = []
+        for item in ranked_evidence:
+            ev = item.record
+            if ev.information_class.value == "hard_fact":
+                if ev.type.value in ["person", "character"]:
+                    facts.append(f"Character: {ev.entity}")
+                elif ev.type.value == "object":
+                    facts.append(f"Object: {ev.entity}")
+                elif ev.type.value == "action":
+                    facts.append(f"Action: {ev.entity}")
+                elif ev.type.value == "spatial_fact":
+                    facts.append(f"Spatial: {ev.entity}")
+                elif ev.type.value == "ocr":
+                    facts.append(f"Text: {ev.entity}")
+        return list(dict.fromkeys(facts))  # deduplicate preserving order
+    
+    def _extract_soft_inferences(self, ranked_evidence: list[RetrievedEvidence]) -> list[str]:
+        """Extract soft inferences from ranked evidence."""
+        inferences = []
+        for item in ranked_evidence:
+            ev = item.record
+            if ev.information_class.value == "soft_inference":
+                if ev.type.value == "action":
+                    inferences.append(f"Possibly {ev.entity} (confidence: {ev.confidence:.2f})")
+                elif ev.type.value == "relationship":
+                    inferences.append(f"Possible relationship: {ev.relationship} involving {ev.entity}")
+        return list(dict.fromkeys(inferences))
+    
+    def _extract_locked_facts(self, ranked_evidence: list[RetrievedEvidence]) -> list[str]:
+        """Extract locked visual facts that must not be contradicted."""
+        facts = []
+        for item in ranked_evidence:
+            ev = item.record
+            if ev.information_class.value == "hard_fact":
+                facts.append(f"{ev.entity}")
+        return list(dict.fromkeys(facts))
+    
+    def _summarize_evidence(self, ranked_evidence: list[RetrievedEvidence]) -> str:
+        parts = []
+        for item in ranked_evidence[:10]:
+            ev = item.record
+            parts.append(f"{ev.entity} ({ev.type.value}): {ev.evidence_text[:80]}")
+        return "; ".join(parts)
+    
+    def _extract_soft_inferences(
+        self,
+        observations: list[VisualObservations],
+        ranked_evidence: list[RetrievedEvidence],
+    ) -> list[str]:
+        """Legacy method - kept for compatibility."""
+        return self._extract_soft_inferences(ranked_evidence)
+    
+    def _extract_locked_facts(
+        self,
+        observations: list[VisualObservations],
+        ranked_evidence: list[RetrievedEvidence],
+    ) -> list[str]:
+        """Legacy method - kept for compatibility."""
+        return self._extract_locked_facts(ranked_evidence)
     
     def create_creative_plan(
         self,

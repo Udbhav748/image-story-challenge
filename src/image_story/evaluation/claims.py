@@ -1,9 +1,9 @@
 """Claim extraction and verification for story evaluation."""
 import re
-from typing import Any
+from typing import Any, Literal
 
 from ..domain.schemas import StoryClaim, StoryDraft, EvidenceRecord, VerificationResult
-from ..domain.enums import ClaimStatus, InformationClass
+from ..domain.enums import ClaimStatus, InformationClass, ClaimClassification
 from ..vision.verifier import VisualVerifier
 
 
@@ -31,6 +31,10 @@ class ClaimExtractor:
         for i, sentence in enumerate(sentences):
             sentence_claims = self._extract_claims_from_sentence(sentence, i)
             claims.extend(sentence_claims)
+        
+        # Classify claims after extraction
+        for claim in claims:
+            claim.claim_classification = self._classify_claim_classification(claim, context)
         
         return claims
     
@@ -78,19 +82,71 @@ class ClaimExtractor:
             "seemed", "appeared", "felt", "thought", "wondered", "imagined",
             "perhaps", "maybe", "possibly", "might", "could be",
             "personality", "motivation", "dream", "hope", "fear",
+            "secretly", "hidden", "secret", "internal", "mental",
             "funny", "awkward", "surprisingly", "ironically",
+            "metaphor", "symbolized", "represented",
+            "dreamed", "hoped", "feared", "imagined",
         ]
         
         sentence_lower = sentence.lower()
         if any(marker in sentence_lower for marker in creative_markers):
+            # But "appeared to be" and "seemed to be" are inference, not creative
+            if any(inf in sentence_lower for inf in ["appeared to be", "seemed to be", "looked like"]):
+                return InformationClass.SOFT_INFERENCE
             return InformationClass.CREATIVE_SPACE
         
         visual_words = ["wearing", "holding", "standing", "sitting", "walking", "carrying",
-                       "red", "blue", "green", "large", "small", "next to", "in front of"]
+                       "red", "blue", "green", "large", "small", "next to", "in front of",
+                       "behind", "under", "above", "inside", "outside", "visible", "saw",
+                       "looked like", "appeared to be"]
         if any(word in sentence_lower for word in visual_words):
             return InformationClass.HARD_FACT
         
         return InformationClass.SOFT_INFERENCE
+    
+    def _classify_claim_classification(self, claim: StoryClaim, context: str) -> str:
+        """Classify claim as OBSERVED, INFERRED, or CREATIVE."""
+        sentence_lower = claim.original_sentence.lower()
+        
+        # Creative markers - internal states, personality, metaphor
+        creative_markers = [
+            "seemed", "appeared", "felt", "thought", "wondered", "imagined",
+            "perhaps", "maybe", "possibly", "might", "could be",
+            "personality", "motivation", "dream", "hope", "fear",
+            "secretly", "hidden", "secret", "internal", "mental",
+            "funny", "awkward", "surprisingly", "ironically",
+            "metaphor", "symbolized", "represented",
+            "dreamed", "hoped", "feared", "imagined",
+            "wanted", "desired", "wished",
+        ]
+        
+        # Visual/observable words
+        visual_words = ["wearing", "holding", "standing", "sitting", "walking", "carrying",
+                       "red", "blue", "green", "large", "small", "next to", "in front of",
+                       "behind", "under", "above", "inside", "outside", "visible", "saw",
+                       "looked like", "appeared to be"]
+        
+        # Inference markers - qualified statements
+        inference_markers = ["appeared to", "seemed to", "looked like", "might be", "probably",
+                           "likely", "perhaps", "possibly", "maybe", "seemed"]
+        
+        # Check creative first (most specific)
+        if any(marker in sentence_lower for marker in creative_markers):
+            # But "appeared to be" and "seemed to be" are inference, not creative
+            if any(inf in sentence_lower for inf in ["appeared to be", "seemed to be", "looked like"]):
+                return "inferred"
+            return "creative"
+        
+        # Check inference markers
+        if any(marker in sentence_lower for marker in inference_markers):
+            return "inferred"
+        
+        # Check visual words
+        if any(word in sentence_lower for word in visual_words):
+            return "observed"
+        
+        # Default to inferred for factual statements that aren't clearly visual
+        return "inferred"
     
     def _fallback_extract(self, sentence: str) -> list[StoryClaim]:
         """Simple regex-based claim extraction fallback."""
@@ -199,8 +255,105 @@ class ClaimVerifier:
         if not results:
             return 0.0
         
-        supported = sum(1 for r in results if r.status == ClaimStatus.SUPPORTED.value)
-        contradicted = sum(1 for r in results if r.status == ClaimStatus.CONTRADICTED.value)
-        total = len(results)
+        supported = 0.0
+        contradicted = 0.0
+        total = 0
+        creative_count = 0
         
-        return (supported - contradicted * 0.5) / total
+        for r in results:
+            claim = r.claim
+            # Handle missing claim_classification gracefully
+            classification = getattr(claim, 'claim_classification', 'inferred')
+            # Creative claims don't count against grounding
+            if classification == "creative":
+                creative_count += 1
+                continue
+            # Observed claims must be supported
+            elif classification == "observed":
+                if r.status == ClaimStatus.SUPPORTED.value:
+                    supported += 1
+                elif r.status == ClaimStatus.CONTRADICTED.value:
+                    contradicted += 1
+            # Inferred claims are softer
+            else:  # inferred
+                if r.status == ClaimStatus.SUPPORTED.value:
+                    supported += 0.5
+                elif r.status == ClaimStatus.CONTRADICTED.value:
+                    contradicted += 0.5
+            total += 1
+        
+        # Adjust total to exclude creative claims
+        total = total - creative_count
+        
+        if total <= 0:
+            return 1.0  # all claims were creative
+        
+        return max(0.0, (supported - contradicted * 0.5) / total)
+    
+    def repair_story(
+        self,
+        story: str,
+        verification_results: list[VerificationResult],
+        evidence_records: list[EvidenceRecord],
+    ) -> tuple[str, list[dict]]:
+        """Repair unsupported observed claims in the story."""
+        repaired_sentences = []
+        repair_report = []
+        
+        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", story.strip()) if s.strip()]
+        
+        for sentence in sentences:
+            # Check if this sentence has contradicted or unsupported observed claims
+            sentence_claims = self._extract_claims_from_sentence(sentence, 0)
+            needs_repair = False
+            repair_info = []
+            
+            for claim in sentence_claims:
+                claim.claim_classification = self._classify_claim_classification(claim, "")
+                for vr in verification_results:
+                    if vr.claim.id == claim.id:
+                        if claim.claim_classification == "observed" and vr.status in [ClaimStatus.UNSUPPORTED.value, ClaimStatus.CONTRADICTED.value]:
+                            needs_repair = True
+                            repair_info.append({
+                                "claim": claim.to_natural_language(),
+                                "classification": claim.claim_classification,
+                                "status": vr.status,
+                                "original_sentence": sentence,
+                            })
+            
+            if needs_repair:
+                repaired = self._repair_sentence(sentence, repair_info)
+                repaired_sentences.append(repaired)
+                repair_report.append({
+                    "original": sentence,
+                    "repaired": repaired,
+                    "issues": repair_info,
+                })
+            else:
+                repaired_sentences.append(sentence)
+        
+        return " ".join(repaired_sentences), repair_report
+    
+    def _repair_sentence(self, sentence: str, repair_info: list[dict]) -> str:
+        """Attempt to repair a sentence with unsupported observed claims."""
+        # Simple repair: remove or qualify the unsupported claim
+        # This is a simplified repair - in practice could use LLM
+        repaired = sentence
+        
+        for issue in repair_info:
+            # Try to qualify the statement
+            claim_text = issue["claim"]
+            # Replace definitive statements with qualified ones
+            replacements = [
+                (f"The {issue['claim'].split(' ')[1]} {issue['claim'].split(' ')[2]} the {issue['claim'].split(' ')[-1]}", 
+                 f"The {issue['claim'].split(' ')[1]} seemed to {issue['claim'].split(' ')[2]} the {issue['claim'].split(' ')[-1]}"),
+                (" was ", " appeared to be "),
+                (" is ", " seemed to be "),
+                (" has ", " appeared to have "),
+            ]
+            for old, new in replacements:
+                if old in repaired:
+                    repaired = repaired.replace(old, new)
+                    break
+        
+        return repaired

@@ -101,6 +101,7 @@ class SequenceContextBuilder(ContextBuilder):
         """Build prompt for multi-image story generation."""
         
         creativity_instruction = ""
+        locked_facts = ""
         if creative_plan:
             creativity_instruction = f"""
 Creative direction:
@@ -111,12 +112,20 @@ Creative direction:
 - Humor level: {creative_plan.humor_level:.1f}/1.0
 - Mystery level: {creative_plan.mystery_level:.1f}/1.0
 """
+            if creative_plan.locked_facts:
+                locked_facts = f"""
+LOCKED VISUAL FACTS (DO NOT CONTRADICT OR REPLACE):
+{', '.join(creative_plan.locked_facts[:15])}
+
+These are visually verified. Do not add, remove, or change them.
+Creative invention is allowed for: personality, motivation, internal thoughts, dialogue, humor, metaphor, narrative meaning.
+"""
         
         prompt = f"""You are a creative storyteller. Here are {num_images} consecutive images from a sequence.
 
 {context}
 
-{creativity_instruction}
+{locked_facts}{creativity_instruction}
 
 Write ONE continuous story of about {target_words} words that follows these images in order, using only what the descriptions say. Maintain character identity and location consistency. Connect events naturally between frames. Do not describe each image separately.
 

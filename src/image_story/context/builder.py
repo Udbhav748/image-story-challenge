@@ -163,6 +163,7 @@ class ContextBuilder:
         """Build the final prompt for the story generator."""
         
         creativity_instruction = ""
+        locked_facts = ""
         if creative_plan:
             creativity_instruction = f"""
 Creative direction:
@@ -173,12 +174,20 @@ Creative direction:
 - Humor level: {creative_plan.humor_level:.1f}/1.0
 - Mystery level: {creative_plan.mystery_level:.1f}/1.0
 """
+            if creative_plan.locked_facts:
+                locked_facts = f"""
+LOCKED VISUAL FACTS (DO NOT CONTRADICT OR REPLACE):
+{', '.join(creative_plan.locked_facts[:15])}
+
+These are visually verified. Do not add, remove, or change them.
+Creative invention is allowed for: personality, motivation, internal thoughts, dialogue, humor, metaphor, narrative meaning.
+"""
         
         prompt = f"""You are a creative storyteller. Write a story of approximately {target_words} words based on the following structured visual evidence and creative direction.
 
 {context}
 
-{creativity_instruction}
+{locked_facts}{creativity_instruction}
 
 CRITICAL RULES:
 1. HARD FACTS are visually grounded and MUST NOT be contradicted

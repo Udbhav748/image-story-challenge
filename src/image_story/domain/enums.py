@@ -148,3 +148,10 @@ class EvaluationMetric(str, Enum):
     REPETITION = "repetition"
     CLAIM_SUPPORT = "claim_support"
     VISUAL_SUPPORT = "visual_support"
+
+
+class ClaimClassification(str, Enum):
+    """Classification of story claims."""
+    OBSERVED = "observed"       # Directly supported by visual evidence
+    INFERRED = "inferred"       # Reasonable interpretation, not directly proven
+    CREATIVE = "creative"       # Narrative invention (motivations, thoughts, dialogue, humor, metaphor)

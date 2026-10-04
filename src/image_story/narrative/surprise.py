@@ -2,7 +2,7 @@
 from typing import Any
 import random
 
-from ..domain.schemas import WorldEntity, WorldState
+from ..domain.schemas import WorldEntity, WorldState, RetrievedEvidence
 from ..domain.enums import EvidenceType
 
 
@@ -12,7 +12,6 @@ class SurpriseEngine:
     SURPRISE_PATTERNS = [
         "recontextualization",
         "hidden_significance",
-        "identity_reveal",
         "causal_chain",
         "perspective_shift",
         "callback_payoff",
@@ -28,12 +27,6 @@ class SurpriseEngine:
         "The {object} {char} carried contained {hidden_content}, unknown to everyone.",
         "The {detail} in {location} was actually {significance}.",
         "{char}'s {habit} wasn't just a quirk - it was {true_purpose}.",
-    ]
-    
-    IDENTITY_REVEAL_TEMPLATES = [
-        "The {object} was {true_identity} all along.",
-        "{char} realized the {entity} was {true_identity}.",
-        "What appeared to be {false_identity} was actually {true_identity}.",
     ]
     
     CAUSAL_CHAIN_TEMPLATES = [
@@ -59,29 +52,48 @@ class SurpriseEngine:
         world_state: WorldState,
         evidence_summary: str,
         foreshadowing_elements: list[dict[str, Any]],
+        retrieved_evidence: list[RetrievedEvidence] | None = None,
     ) -> dict[str, Any] | None:
         """Generate a grounded surprise/twist."""
         if self._rng.random() > self._surprise_level:
             return None
         
-        pattern = self._rng.choice(self.SURPRISE_PATTERNS)
+        # Prefer patterns that use actual evidence
+        available_patterns = self.SURPRISE_PATTERNS.copy()
+        if not foreshadowing_elements:
+            available_patterns = [p for p in available_patterns if p != "callback_payoff"]
+        if not retrieved_evidence:
+            available_patterns = [p for p in available_patterns if p not in ["recontextualization", "hidden_significance"]]
         
-        if pattern == "callback_payoff" and foreshadowing_elements:
+        # If callback_payoff is available and foreshadowing exists, prioritize it
+        if foreshadowing_elements and "callback_payoff" in available_patterns:
             return self._generate_callback_payoff(foreshadowing_elements, world_state)
-        elif pattern == "recontextualization":
-            return self._generate_recontextualization(world_state)
+        
+        pattern = self._rng.choice(available_patterns)
+        
+        if pattern == "recontextualization":
+            return self._generate_recontextualization(world_state, retrieved_evidence)
         elif pattern == "hidden_significance":
-            return self._generate_hidden_significance(world_state)
+            return self._generate_hidden_significance(world_state, retrieved_evidence)
         elif pattern == "causal_chain":
-            return self._generate_causal_chain(world_state)
+            return self._generate_causal_chain(world_state, retrieved_evidence)
         elif pattern == "perspective_shift":
-            return self._generate_perspective_shift(world_state)
+            return self._generate_perspective_shift(world_state, retrieved_evidence)
         else:
-            return self._generate_identity_reveal(world_state)
+            return None
     
-    def _generate_recontextualization(self, world_state: WorldState) -> dict[str, Any]:
-        objects = [e for e in world_state.get_all_entities() if e.entity_type == "object"]
-        characters = [e for e in world_state.get_all_entities() if e.entity_type == "character"]
+    def _generate_recontextualization(
+        self, 
+        world_state: WorldState, 
+        retrieved_evidence: list[RetrievedEvidence] | None = None
+    ) -> dict[str, Any]:
+        # Use actual evidence entities when available
+        if retrieved_evidence:
+            objects = [e.record.entity for e in retrieved_evidence if e.record.type.value == "object" and e.record.information_class.value == "hard_fact"]
+            characters = [e.record.entity for e in retrieved_evidence if e.record.type.value in ["person", "character"] and e.record.information_class.value == "hard_fact"]
+        else:
+            objects = [e.label for e in world_state.get_all_entities() if e.entity_type == "object"]
+            characters = [e.label for e in world_state.get_all_entities() if e.entity_type == "character"]
         
         if not objects or not characters:
             return None
@@ -91,8 +103,8 @@ class SurpriseEngine:
         
         template = self._rng.choice(self.RECONTEXTUALIZATION_TEMPLATES)
         description = template.format(
-            object=obj.label,
-            char=char.label,
+            object=obj,
+            char=char,
             assumed_function="ordinary",
             true_function="the key to everything",
             mistaken_identity="a simple object",
@@ -105,13 +117,21 @@ class SurpriseEngine:
         return {
             "type": "recontextualization",
             "description": description,
-            "grounded_entities": [obj.label, char.label],
+            "grounded_entities": [obj, char],
             "pattern": "recontextualization",
         }
     
-    def _generate_hidden_significance(self, world_state: WorldState) -> dict[str, Any]:
-        objects = [e for e in world_state.get_all_entities() if e.entity_type == "object"]
-        characters = [e for e in world_state.get_all_entities() if e.entity_type == "character"]
+    def _generate_hidden_significance(
+        self, 
+        world_state: WorldState, 
+        retrieved_evidence: list[RetrievedEvidence] | None = None
+    ) -> dict[str, Any]:
+        if retrieved_evidence:
+            objects = [e.record.entity for e in retrieved_evidence if e.record.type.value == "object" and e.record.information_class.value == "hard_fact"]
+            characters = [e.record.entity for e in retrieved_evidence if e.record.type.value in ["person", "character"] and e.record.information_class.value == "hard_fact"]
+        else:
+            objects = [e.label for e in world_state.get_all_entities() if e.entity_type == "object"]
+            characters = [e.label for e in world_state.get_all_entities() if e.entity_type == "character"]
         
         if not objects or not characters:
             return None
@@ -121,8 +141,8 @@ class SurpriseEngine:
         
         template = self._rng.choice(self.HIDDEN_SIGNIFICANCE_TEMPLATES)
         description = template.format(
-            object=obj.label,
-            char=char.label,
+            object=obj,
+            char=char,
             hidden_content="a map to somewhere important",
             detail="scratched mark",
             location="the doorway",
@@ -134,42 +154,29 @@ class SurpriseEngine:
         return {
             "type": "hidden_significance",
             "description": description,
-            "grounded_entities": [obj.label, char.label],
+            "grounded_entities": [obj, char],
             "pattern": "hidden_significance",
         }
     
-    def _generate_identity_reveal(self, world_state: WorldState) -> dict[str, Any]:
-        objects = [e for e in world_state.get_all_entities() if e.entity_type == "object"]
-        characters = [e for e in world_state.get_all_entities() if e.entity_type == "character"]
-        
-        if not objects and not characters:
-            return None
-        
-        entities = objects + characters
-        entity = self._rng.choice(entities)
-        
-        template = self._rng.choice(self.IDENTITY_REVEAL_TEMPLATES)
-        description = template.format(
-            object=entity.label,
-            entity=entity.label,
-            char=self._rng.choice(characters).label if characters else "someone",
-            true_identity="far more than it seemed",
-            false_identity="just a " + entity.label,
-        )
-        
-        return {
-            "type": "identity_reveal",
-            "description": description,
-            "grounded_entities": [entity.label],
-            "pattern": "identity_reveal",
-        }
-    
-    def _generate_causal_chain(self, world_state: WorldState) -> dict[str, Any]:
+    def _generate_causal_chain(
+        self, 
+        world_state: WorldState, 
+        retrieved_evidence: list[RetrievedEvidence] | None = None
+    ) -> dict[str, Any]:
         events = world_state.previous_events
         if not events:
             return None
         
-        event = self._rng.choice(events)
+        # Use evidence from retrieved_evidence if available
+        if retrieved_evidence:
+            details = [e.record.entity for e in retrieved_evidence if e.record.information_class.value == "hard_fact"]
+            if details:
+                detail = self._rng.choice(details)
+            else:
+                detail = "forgotten detail"
+        else:
+            detail = "forgotten detail"
+        
         template = self._rng.choice(self.CAUSAL_CHAIN_TEMPLATES)
         
         description = template.format(
@@ -179,7 +186,7 @@ class SurpriseEngine:
             major_consequence="the current revelation",
             event="earlier moment",
             current_situation="this exact moment",
-            detail="forgotten detail",
+            detail=detail,
             earlier_frame="the first frame",
             current_mystery="why things are this way",
         )
@@ -187,11 +194,15 @@ class SurpriseEngine:
         return {
             "type": "causal_chain",
             "description": description,
-            "grounded_entities": [],
+            "grounded_entities": [detail] if detail != "forgotten detail" else [],
             "pattern": "causal_chain",
         }
     
-    def _generate_perspective_shift(self, world_state: WorldState) -> dict[str, Any]:
+    def _generate_perspective_shift(
+        self, 
+        world_state: WorldState, 
+        retrieved_evidence: list[RetrievedEvidence] | None = None
+    ) -> dict[str, Any]:
         characters = [e for e in world_state.get_all_entities() if e.entity_type == "character"]
         objects = [e for e in world_state.get_all_entities() if e.entity_type == "object"]
         

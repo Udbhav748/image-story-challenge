@@ -250,6 +250,11 @@ class CreativePlan:
     foreshadowing_elements: list[dict[str, Any]] = field(default_factory=list)
     callback_plan: list[dict[str, Any]] = field(default_factory=list)
     narrative_arc: list[dict[str, Any]] = field(default_factory=list)
+    # V2.1: Grounded creativity fields
+    hard_facts: list[str] = field(default_factory=list)
+    soft_inferences: list[str] = field(default_factory=list)
+    locked_facts: list[str] = field(default_factory=list)
+    creative_budget: dict[str, int] = field(default_factory=dict)
     
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -268,6 +273,10 @@ class CreativePlan:
             "foreshadowing_elements": self.foreshadowing_elements,
             "callback_plan": self.callback_plan,
             "narrative_arc": self.narrative_arc,
+            "hard_facts": self.hard_facts,
+            "soft_inferences": self.soft_inferences,
+            "locked_facts": self.locked_facts,
+            "creative_budget": self.creative_budget,
         }
 
 
@@ -342,6 +351,8 @@ class StoryClaim:
     object: str = ""
     original_sentence: str = ""
     claim_type: InformationClass = InformationClass.HARD_FACT
+    claim_classification: str = "inferred"  # "observed", "inferred", "creative"
+    evidence_ids: list[str] = field(default_factory=list)
     confidence: float = 0.0
     
     def to_natural_language(self) -> str:
@@ -355,6 +366,8 @@ class StoryClaim:
             "object": self.object,
             "original_sentence": self.original_sentence,
             "claim_type": self.claim_type.value,
+            "claim_classification": self.claim_classification,
+            "evidence_ids": self.evidence_ids,
             "confidence": self.confidence,
             "natural_language": self.to_natural_language(),
         }
@@ -445,7 +458,7 @@ class EvaluationResult:
 @dataclass
 class PipelineConfig:
     """Configuration for pipeline execution."""
-    mode: Literal["fast", "standard", "full"] = "standard"
+    mode: Literal["fast", "standard", "full", "baseline"] = "standard"
     use_grounding_dino: bool = True
     use_ocr: bool = False
     use_faiss: bool = True
@@ -464,6 +477,13 @@ class PipelineConfig:
         "dialogue": 0.4,
         "metaphor": 0.3,
     })
+    # Creative fact budget - limits on creative invention
+    creative_budget: dict[str, int] = field(default_factory=lambda: {
+        "max_creative_claims": 6,
+        "max_visual_inventions": 0,
+        "max_soft_inferences": 3,
+        "max_new_named_entities": 0,
+    })
     genre: str = "whimsical"
     tone: str = "comedic"
     seed: int = 0
@@ -481,6 +501,12 @@ class PipelineConfig:
                 use_creative_planner=False,
                 use_verification=False,
                 target_story_words=100,
+                creative_budget={
+                    "max_creative_claims": 2,
+                    "max_visual_inventions": 0,
+                    "max_soft_inferences": 1,
+                    "max_new_named_entities": 0,
+                },
             )
         elif mode == "standard":
             return cls(
@@ -491,6 +517,12 @@ class PipelineConfig:
                 use_creative_planner=True,
                 use_verification=True,
                 target_story_words=250,
+                creative_budget={
+                    "max_creative_claims": 6,
+                    "max_visual_inventions": 0,
+                    "max_soft_inferences": 3,
+                    "max_new_named_entities": 0,
+                },
             )
         elif mode == "full":
             return cls(
@@ -509,6 +541,12 @@ class PipelineConfig:
                     "emotion": 0.6,
                     "dialogue": 0.5,
                     "metaphor": 0.4,
+                },
+                creative_budget={
+                    "max_creative_claims": 8,
+                    "max_visual_inventions": 0,
+                    "max_soft_inferences": 4,
+                    "max_new_named_entities": 1,
                 },
             )
         elif mode == "baseline":
@@ -529,6 +567,12 @@ class PipelineConfig:
                     "dialogue": 0.2,
                     "metaphor": 0.1,
                 },
+                creative_budget={
+                    "max_creative_claims": 2,
+                    "max_visual_inventions": 0,
+                    "max_soft_inferences": 1,
+                    "max_new_named_entities": 0,
+                },
             )
         else:
             raise ValueError(f"Unknown mode: {mode}")
@@ -546,6 +590,7 @@ class PipelineConfig:
             "context_max_words": self.context_max_words,
             "target_story_words": self.target_story_words,
             "creativity_config": self.creativity_config,
+            "creative_budget": self.creative_budget,
             "genre": self.genre,
             "tone": self.tone,
             "seed": self.seed,

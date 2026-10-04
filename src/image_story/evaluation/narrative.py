@@ -152,16 +152,97 @@ class NarrativeQualityEvaluator:
         story_lower = story.text.lower()
         return sum(1 for ind in humor_indicators if ind in story_lower)
     
+    def evaluate_narrative_quality(
+        self,
+        story: StoryDraft,
+        creative_plan: CreativePlan | None = None,
+        world_state: Any = None,
+        verification_results: list = None,
+    ) -> dict[str, Any]:
+        """Evaluate various narrative quality metrics."""
+        
+        metrics = {}
+        
+        # Character development
+        metrics["character_mentions"] = self._count_character_mentions(story, creative_plan)
+        metrics["character_depth"] = self._assess_character_depth(story, creative_plan)
+        
+        # Plot structure
+        metrics["has_setup"] = self._check_setup(story)
+        metrics["has_conflict"] = self._check_conflict(story)
+        metrics["has_resolution"] = self._check_resolution(story)
+        metrics["has_surprise"] = self._check_surprise(story)
+        metrics["has_callback"] = self._check_callback(story, creative_plan)
+        
+        # Emotional arc
+        metrics["emotional_progression"] = self._assess_emotional_arc(story)
+        
+        # Dialogue
+        metrics["dialogue_present"] = self._check_dialogue(story)
+        
+        # Humor
+        metrics["humor_attempts"] = self._count_humor_attempts(story)
+        
+        # V2.1: Creative quality metrics
+        metrics["creative_claims"] = self._count_creative_claims(verification_results)
+        metrics["observed_claims"] = self._count_observed_claims(verification_results)
+        metrics["inferred_claims"] = self._count_inferred_claims(verification_results)
+        metrics["creative_quality_proxy"] = self._assess_creative_quality(story, creative_plan, verification_results)
+        
+        # Overall narrative quality score
+        metrics["narrative_quality_score"] = self._compute_narrative_score(metrics)
+        
+        return metrics
+    
+    def _count_creative_claims(self, verification_results: list) -> int:
+        if not verification_results:
+            return 0
+        return sum(1 for r in verification_results if r.claim.claim_classification == "creative")
+    
+    def _count_observed_claims(self, verification_results: list) -> int:
+        if not verification_results:
+            return 0
+        return sum(1 for r in verification_results if r.claim.claim_classification == "observed")
+    
+    def _count_inferred_claims(self, verification_results: list) -> int:
+        if not verification_results:
+            return 0
+        return sum(1 for r in verification_results if r.claim.claim_classification == "inferred")
+    
+    def _assess_creative_quality(
+        self, 
+        story: StoryDraft, 
+        creative_plan: CreativePlan | None,
+        verification_results: list
+    ) -> float:
+        """Assess creative quality - are creative claims actually creative, not just unsupported?"""
+        if not verification_results:
+            return 0.0
+        
+        creative_count = sum(1 for r in verification_results if r.claim.claim_classification == "creative")
+        observed_count = sum(1 for r in verification_results if r.claim.claim_classification == "observed")
+        
+        if creative_count == 0:
+            return 0.0
+        
+        # Good creative quality = creative claims present + observed claims supported
+        creative_ratio = creative_count / max(1, len(verification_results))
+        # Bonus for having both creative and observed content
+        balance_bonus = 0.2 if observed_count > 0 else 0.0
+        
+        return min(creative_ratio + balance_bonus, 1.0)
+    
     def _compute_narrative_score(self, metrics: dict[str, Any]) -> float:
         score = 0.0
         weights = {
-            "character_depth": 0.2,
-            "has_setup": 0.1,
-            "has_conflict": 0.2,
-            "has_resolution": 0.15,
-            "has_surprise": 0.15,
-            "has_callback": 0.1,
-            "emotional_progression": 0.1,
+            "character_depth": 0.15,
+            "has_setup": 0.08,
+            "has_conflict": 0.15,
+            "has_resolution": 0.12,
+            "has_surprise": 0.12,
+            "has_callback": 0.08,
+            "emotional_progression": 0.08,
+            "creative_quality_proxy": 0.18,
         }
         
         for key, weight in weights.items():
