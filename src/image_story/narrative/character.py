@@ -33,6 +33,31 @@ class CharacterProfile:
         "pretends to be a narrator",
         "counts steps compulsively",
         "names every stray animal",
+        "taps fingers when thinking",
+        "hums when nervous",
+        "checks pockets repeatedly",
+        "speaks to animals",
+    ]
+    
+    DEEPER_TRAITS = [
+        "secretly fears abandonment",
+        "desperately wants to be understood",
+        "hides pain behind humor",
+        "carries guilt from past mistake",
+        "yearns for connection but pushes people away",
+        "believes they're not good enough",
+        "secretly ambitious",
+        "haunted by a past failure",
+        "fiercely protective of loved ones",
+        "struggles with self-doubt",
+    ]
+    
+    INTERNAL_CONFLICTS = [
+        "wants to help but fears getting hurt",
+        "wants to be honest but fears rejection",
+        "wants to lead but doubts their ability",
+        "wants to trust but has been betrayed",
+        "wants to stay but feels the need to run",
     ]
     
     def __init__(
@@ -49,6 +74,8 @@ class CharacterProfile:
         self.archetype = self._rng.choice(list(self.ARCHETYPES.keys()))
         self.personality_traits = self.ARCHETYPES[self.archetype][:]
         self.quirk = self._rng.choice(self.QUIRKS)
+        self.deeper_trait = self._rng.choice(self.DEEPER_TRAITS)
+        self.internal_conflict = self._rng.choice(self.INTERNAL_CONFLICTS)
         self.motivation = ""
         self.goal = ""
         self.emotional_state = "neutral"
@@ -68,7 +95,7 @@ class CharacterProfile:
         }
         
         self.motivation = self._rng.choice(motivations.get(self.archetype, ["to understand"]))
-        self.goal = f"{self.motivation} by {self._rng.choice(['exploring', 'investigating', 'creating', 'connecting'])}"
+        self.goal = f"{self.motivation} by {self._rng.choice(['exploring', 'investigating', 'creating', 'connecting', 'protecting', 'understanding'])}"
     
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -76,6 +103,8 @@ class CharacterProfile:
             "archetype": self.archetype,
             "personality": ", ".join(self.personality_traits),
             "quirk": self.quirk,
+            "deeper_trait": self.deeper_trait,
+            "internal_conflict": self.internal_conflict,
             "motivation": self.motivation,
             "goal": self.goal,
             "emotional_state": self.emotional_state,

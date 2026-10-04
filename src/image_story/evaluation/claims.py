@@ -86,14 +86,46 @@ class ClaimExtractor:
             "funny", "awkward", "surprisingly", "ironically",
             "metaphor", "symbolized", "represented",
             "dreamed", "hoped", "feared", "imagined",
+            "wanted", "desired", "wished",
+            "judged", "opinion", "attitude", "perspective",
+            "ironic", "sarcastic", "deadpan", "absurd", "ridiculous",
+            "pretended", "pretending", "imagined",
         ]
         
         sentence_lower = sentence.lower()
-        if any(marker in sentence_lower for marker in creative_markers):
-            # But "appeared to be" and "seemed to be" are inference, not creative
-            if any(inf in sentence_lower for inf in ["appeared to be", "seemed to be", "looked like"]):
-                return InformationClass.SOFT_INFERENCE
+        
+        # Safe creative phrases that should NEVER be penalized
+        safe_creative_phrases = [
+            "secretly", "hidden", "secret", "internal", "mental",
+            "personality", "motivation", "dream", "hope", "fear",
+            "metaphor", "symbolized", "represented",
+            "judged", "opinion", "attitude", "perspective",
+            "ironic", "sarcastic", "deadpan", "absurd", "ridiculous",
+            "pretended", "pretending", "imagined",
+            "wanted", "desired", "wished", "hoped", "dreamed",
+        ]
+        
+        # First: Check for SAFE creative phrases - these are ALWAYS creative
+        if any(phrase in sentence_lower for phrase in safe_creative_phrases):
             return InformationClass.CREATIVE_SPACE
+        
+        # Check for creative markers (but exclude inference phrases)
+        has_creative_marker = any(marker in sentence_lower for marker in creative_markers)
+        has_inference_phrase = any(inf in sentence_lower for inf in [
+            "appeared to be", "seemed to be", "looked like", "looked as if", "as if"
+        ])
+        
+        if has_creative_marker and not has_inference_phrase:
+            return InformationClass.CREATIVE_SPACE
+        
+        # Check inference phrases
+        inference_phrases = [
+            "appeared to be", "seemed to be", "looked like", "looked as if", "as if",
+            "might be", "probably", "likely", "perhaps", "possibly", "maybe", "seemed to be",
+            "appeared to be", "looked as if", "as if"
+        ]
+        if any(inf in sentence_lower for inf in inference_phrases):
+            return InformationClass.SOFT_INFERENCE
         
         visual_words = ["wearing", "holding", "standing", "sitting", "walking", "carrying",
                        "red", "blue", "green", "large", "small", "next to", "in front of",
@@ -108,7 +140,7 @@ class ClaimExtractor:
         """Classify claim as OBSERVED, INFERRED, or CREATIVE."""
         sentence_lower = claim.original_sentence.lower()
         
-        # Creative markers - internal states, personality, metaphor
+        # Creative markers - internal states, personality, metaphor, humor, attitude
         creative_markers = [
             "seemed", "appeared", "felt", "thought", "wondered", "imagined",
             "perhaps", "maybe", "possibly", "might", "could be",
@@ -118,31 +150,56 @@ class ClaimExtractor:
             "metaphor", "symbolized", "represented",
             "dreamed", "hoped", "feared", "imagined",
             "wanted", "desired", "wished",
+            "judged", "opinion", "attitude", "perspective",
+            "ironic", "sarcastic", "deadpan", "absurd", "ridiculous",
+            "pretended", "pretending", "imagined",
         ]
         
-        # Visual/observable words
+        # Visual/observable words - direct visual facts
         visual_words = ["wearing", "holding", "standing", "sitting", "walking", "carrying",
                        "red", "blue", "green", "large", "small", "next to", "in front of",
                        "behind", "under", "above", "inside", "outside", "visible", "saw",
                        "looked like", "appeared to be"]
         
-        # Inference markers - qualified statements
-        inference_markers = ["appeared to", "seemed to", "looked like", "might be", "probably",
-                           "likely", "perhaps", "possibly", "maybe", "seemed"]
+        # Inference markers - qualified statements (uncertainty about visual facts)
+        inference_markers = ["appeared to be", "seemed to be", "looked like", "might be", "probably",
+                           "likely", "perhaps", "possibly", "maybe", "seemed to be",
+                           "appeared to be", "looked as if", "as if"]
         
-        # Check creative first (most specific)
-        if any(marker in sentence_lower for marker in creative_markers):
-            # But "appeared to be" and "seemed to be" are inference, not creative
-            if any(inf in sentence_lower for inf in ["appeared to be", "seemed to be", "looked like"]):
-                return "inferred"
+        # Safe creative phrases that should NEVER be penalized
+        safe_creative_phrases = [
+            "secretly", "hidden", "secret", "internal", "mental",
+            "personality", "motivation", "dream", "hope", "fear",
+            "metaphor", "symbolized", "represented",
+            "judged", "opinion", "attitude", "perspective",
+            "ironic", "sarcastic", "deadpan", "absurd", "ridiculous",
+            "pretended", "pretending", "imagined",
+            "wanted", "desired", "wished", "hoped", "dreamed",
+        ]
+        
+        # First: Check for SAFE creative phrases - these are ALWAYS creative
+        if any(phrase in sentence_lower for phrase in safe_creative_phrases):
             return "creative"
         
-        # Check inference markers
-        if any(marker in sentence_lower for marker in inference_markers):
+        # Check for creative markers (but exclude inference phrases)
+        has_creative_marker = any(marker in sentence_lower for marker in creative_markers)
+        has_inference_phrase = any(inf in sentence_lower for inf in [
+            "appeared to be", "seemed to be", "looked like", "looked as if", "as if"
+        ])
+        
+        if has_creative_marker and not has_inference_phrase:
+            return "creative"
+        
+        # Check inference markers (qualified uncertainty about visual facts)
+        if any(inf in sentence_lower for inf in inference_markers):
             return "inferred"
         
-        # Check visual words
-        if any(word in sentence_lower for word in visual_words):
+        # Check visual words (direct visual facts)
+        if any(word in sentence_lower for word in [
+            "wearing", "holding", "standing", "sitting", "walking", "carrying",
+            "red", "blue", "green", "large", "small", "next to", "in front of",
+            "behind", "under", "above", "inside", "outside", "visible", "saw",
+        ]):
             return "observed"
         
         # Default to inferred for factual statements that aren't clearly visual
@@ -166,12 +223,15 @@ class ClaimExtractor:
                 obj = match.group(2).strip()
                 relation = match.group(0).split(subject)[1].split(obj)[0].strip()
                 
+                # Classify claim type based on sentence content
+                claim_type = self._classify_claim_type(sentence, subject, obj)
+                
                 claim = StoryClaim(
                     subject=subject,
                     relation=relation,
                     object=obj,
                     original_sentence=sentence,
-                    claim_type=InformationClass.HARD_FACT,
+                    claim_type=claim_type,
                     confidence=0.6,
                 )
                 claims.append(claim)
@@ -296,14 +356,20 @@ class ClaimVerifier:
         verification_results: list[VerificationResult],
         evidence_records: list[EvidenceRecord],
     ) -> tuple[str, list[dict]]:
-        """Repair unsupported observed claims in the story."""
+        """Repair ONLY visually contradicted claims in the story.
+        
+        Does NOT modify:
+        - Creative content (personality, motivation, humor, metaphor, dialogue)
+        - Inferred claims (qualified statements)
+        - Only fixes directly contradicted visual facts
+        """
         repaired_sentences = []
         repair_report = []
         
         sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", story.strip()) if s.strip()]
         
         for sentence in sentences:
-            # Check if this sentence has contradicted or unsupported observed claims
+            # Check if this sentence has CONTRADICTED observed claims only
             sentence_claims = self._extract_claims_from_sentence(sentence, 0)
             needs_repair = False
             repair_info = []
@@ -312,7 +378,8 @@ class ClaimVerifier:
                 claim.claim_classification = self._classify_claim_classification(claim, "")
                 for vr in verification_results:
                     if vr.claim.id == claim.id:
-                        if claim.claim_classification == "observed" and vr.status in [ClaimStatus.UNSUPPORTED.value, ClaimStatus.CONTRADICTED.value]:
+                        # ONLY repair if: observed claim AND contradicted by evidence
+                        if claim.claim_classification == "observed" and vr.status == ClaimStatus.CONTRADICTED.value:
                             needs_repair = True
                             repair_info.append({
                                 "claim": claim.to_natural_language(),
@@ -335,18 +402,16 @@ class ClaimVerifier:
         return " ".join(repaired_sentences), repair_report
     
     def _repair_sentence(self, sentence: str, repair_info: list[dict]) -> str:
-        """Attempt to repair a sentence with unsupported observed claims."""
-        # Simple repair: remove or qualify the unsupported claim
-        # This is a simplified repair - in practice could use LLM
+        """Attempt to repair a sentence with CONTRADICTED visual claims only."""
         repaired = sentence
         
         for issue in repair_info:
-            # Try to qualify the statement
+            # Only qualify directly contradicted visual facts
             claim_text = issue["claim"]
-            # Replace definitive statements with qualified ones
+            # Replace definitive visual statements with qualified ones
             replacements = [
                 (f"The {issue['claim'].split(' ')[1]} {issue['claim'].split(' ')[2]} the {issue['claim'].split(' ')[-1]}", 
-                 f"The {issue['claim'].split(' ')[1]} seemed to {issue['claim'].split(' ')[2]} the {issue['claim'].split(' ')[-1]}"),
+                 f"The {issue['claim'].split(' ')[1]} appeared to {issue['claim'].split(' ')[2]} the {issue['claim'].split(' ')[-1]}"),
                 (" was ", " appeared to be "),
                 (" is ", " seemed to be "),
                 (" has ", " appeared to have "),

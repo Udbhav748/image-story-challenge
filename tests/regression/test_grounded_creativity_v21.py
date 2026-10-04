@@ -202,7 +202,7 @@ class TestLockedFactsInPrompt:
         assert "woman" in prompt
         assert "red bag" in prompt
         assert "street" in prompt
-        assert "DO NOT CONTRADICT" in prompt
+        assert "MUST NOT CONTRADICT" in prompt
 
 
 class TestSurpriseGroundedInEvidence:

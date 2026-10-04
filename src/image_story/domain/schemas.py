@@ -254,7 +254,12 @@ class CreativePlan:
     hard_facts: list[str] = field(default_factory=list)
     soft_inferences: list[str] = field(default_factory=list)
     locked_facts: list[str] = field(default_factory=list)
-    creative_budget: dict[str, int] = field(default_factory=dict)
+    # V2.2: Risk-aware creative budget
+    creative_budget: dict[str, Any] = field(default_factory=lambda: {
+        "safe_creative": {"max": 8, "used": 0},      # personality, humor, dialogue, metaphor
+        "risky_inferred": {"max": 3, "used": 0},    # motivations, uncertain actions
+        "forbidden_visual": {"max": 0, "used": 0},  # new objects, colors, materials, people
+    })
     
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -477,12 +482,11 @@ class PipelineConfig:
         "dialogue": 0.4,
         "metaphor": 0.3,
     })
-    # Creative fact budget - limits on creative invention
-    creative_budget: dict[str, int] = field(default_factory=lambda: {
-        "max_creative_claims": 6,
-        "max_visual_inventions": 0,
-        "max_soft_inferences": 3,
-        "max_new_named_entities": 0,
+    # V2.2: Risk-aware creative budget
+    creative_budget: dict[str, Any] = field(default_factory=lambda: {
+        "safe_creative": {"max": 8, "used": 0},      # personality, humor, dialogue, metaphor
+        "risky_inferred": {"max": 3, "used": 0},    # motivations, uncertain actions
+        "forbidden_visual": {"max": 0, "used": 0},  # new objects, colors, materials, people
     })
     genre: str = "whimsical"
     tone: str = "comedic"
@@ -502,10 +506,9 @@ class PipelineConfig:
                 use_verification=False,
                 target_story_words=100,
                 creative_budget={
-                    "max_creative_claims": 2,
-                    "max_visual_inventions": 0,
-                    "max_soft_inferences": 1,
-                    "max_new_named_entities": 0,
+                    "safe_creative": {"max": 2, "used": 0},
+                    "risky_inferred": {"max": 1, "used": 0},
+                    "forbidden_visual": {"max": 0, "used": 0},
                 },
             )
         elif mode == "standard":
@@ -518,10 +521,9 @@ class PipelineConfig:
                 use_verification=True,
                 target_story_words=250,
                 creative_budget={
-                    "max_creative_claims": 6,
-                    "max_visual_inventions": 0,
-                    "max_soft_inferences": 3,
-                    "max_new_named_entities": 0,
+                    "safe_creative": {"max": 8, "used": 0},
+                    "risky_inferred": {"max": 3, "used": 0},
+                    "forbidden_visual": {"max": 0, "used": 0},
                 },
             )
         elif mode == "full":
@@ -543,10 +545,9 @@ class PipelineConfig:
                     "metaphor": 0.4,
                 },
                 creative_budget={
-                    "max_creative_claims": 8,
-                    "max_visual_inventions": 0,
-                    "max_soft_inferences": 4,
-                    "max_new_named_entities": 1,
+                    "safe_creative": {"max": 10, "used": 0},
+                    "risky_inferred": {"max": 4, "used": 0},
+                    "forbidden_visual": {"max": 0, "used": 0},
                 },
             )
         elif mode == "baseline":
@@ -568,10 +569,9 @@ class PipelineConfig:
                     "metaphor": 0.1,
                 },
                 creative_budget={
-                    "max_creative_claims": 2,
-                    "max_visual_inventions": 0,
-                    "max_soft_inferences": 1,
-                    "max_new_named_entities": 0,
+                    "safe_creative": {"max": 2, "used": 0},
+                    "risky_inferred": {"max": 1, "used": 0},
+                    "forbidden_visual": {"max": 0, "used": 0},
                 },
             )
         else:

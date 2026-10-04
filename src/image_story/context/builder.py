@@ -164,6 +164,7 @@ class ContextBuilder:
         
         creativity_instruction = ""
         locked_facts = ""
+        creative_freedom = ""
         if creative_plan:
             creativity_instruction = f"""
 Creative direction:
@@ -176,21 +177,33 @@ Creative direction:
 """
             if creative_plan.locked_facts:
                 locked_facts = f"""
-LOCKED VISUAL FACTS (DO NOT CONTRADICT OR REPLACE):
+LOCKED VISUAL FACTS (MUST NOT CONTRADICT):
 {', '.join(creative_plan.locked_facts[:15])}
 
-These are visually verified. Do not add, remove, or change them.
-Creative invention is allowed for: personality, motivation, internal thoughts, dialogue, humor, metaphor, narrative meaning.
+These are visually verified facts. Do not contradict, add, or remove them.
+"""
+            creative_freedom = f"""
+CREATIVE FREEDOM (ENCOURAGED):
+You ARE ENCOURAGED to invent:
+- Character personalities, quirks, attitudes, internal thoughts
+- Motivations, desires, fears, hopes, secrets
+- Dialogue, humor, irony, sarcasm, deadpan delivery
+- Metaphors, similes, personification, narrative voice
+- Backstories, relationships, emotional arcs
+- Humor, irony, surprise, callbacks, narrative framing
+
+These are NARRATIVE INVENTIONS - they do not need visual evidence.
+They are encouraged to make the story engaging and meaningful.
 """
         
         prompt = f"""You are a creative storyteller. Write a story of approximately {target_words} words based on the following structured visual evidence and creative direction.
 
 {context}
 
-{locked_facts}{creativity_instruction}
+{locked_facts}{creativity_instruction}{creative_freedom}
 
-CRITICAL RULES:
-1. HARD FACTS are visually grounded and MUST NOT be contradicted
+RULES:
+1. LOCKED VISUAL FACTS must NOT be contradicted, added to, or removed
 2. SOFT INFERENCES are plausible interpretations - you may use or refine them
 3. CREATIVE SPACE is where you invent: personalities, motivations, dialogue, humor, twists, metaphors
 4. Any surprise/twist must REINTERPRET existing evidence, not invent unsupported objects/events
