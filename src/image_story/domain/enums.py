@@ -155,3 +155,246 @@ class ClaimClassification(str, Enum):
     OBSERVED = "observed"       # Directly supported by visual evidence
     INFERRED = "inferred"       # Reasonable interpretation, not directly proven
     CREATIVE = "creative"       # Narrative invention (motivations, thoughts, dialogue, humor, metaphor)
+
+
+# V2.3A: Collection and ingestion enums
+class ImageOrderingMode(str, Enum):
+    """Image ordering modes for collections."""
+    UPLOAD_ORDER = "upload_order"
+    FILENAME = "filename"
+    TIMESTAMP = "timestamp"
+    AUTO = "auto"
+    UNORDERED = "unordered"
+
+
+class ImageValidationStatus(str, Enum):
+    """Image validation status."""
+    VALID = "valid"
+    INVALID = "invalid"
+    SKIPPED = "skipped"
+    DUPLICATE = "duplicate"
+
+
+class ImageProcessingStatus(str, Enum):
+    """Image processing status."""
+    PENDING = "pending"
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    CANCELLED = "cancelled"
+
+
+class ProcessingJobStatus(str, Enum):
+    """Processing job status."""
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    CANCELLED = "cancelled"
+
+
+class CollectionStatus(str, Enum):
+    """Image collection processing status."""
+    PENDING = "pending"
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    PARTIAL_SUCCESS = "partial_success"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class ImageOrderingMode(str, Enum):
+    """Image ordering modes for collections."""
+    UPLOAD_ORDER = "upload_order"
+    FILENAME = "filename"
+    TIMESTAMP = "timestamp"
+    AUTO = "auto"
+    UNORDERED = "unordered"
+
+
+class ImageValidationStatus(str, Enum):
+    """Image validation status."""
+    VALID = "valid"
+    INVALID = "invalid"
+    SKIPPED = "skipped"
+    DUPLICATE = "duplicate"
+
+
+class ImageProcessingStatus(str, Enum):
+    """Image processing status."""
+    PENDING = "pending"
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    CANCELLED = "cancelled"
+
+
+class ProcessingJobStatus(str, Enum):
+    """Processing job status."""
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    CANCELLED = "cancelled"
+
+
+class CollectionStatus(str, Enum):
+    """Image collection processing status."""
+    PENDING = "pending"
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    PARTIAL_SUCCESS = "partial_success"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+# V2.3A: Session and Collection enums
+class SessionStatus(str, Enum):
+    """Story session status."""
+    PENDING = "pending"
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    PARTIAL_SUCCESS = "partial_success"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class CollectionStatus(str, Enum):
+    """Image collection processing status."""
+    PENDING = "pending"
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    PARTIAL_SUCCESS = "partial_success"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class ImageOrderingMode(str, Enum):
+    """Image ordering modes for collections."""
+    UPLOAD_ORDER = "upload_order"
+    FILENAME = "filename"
+    TIMESTAMP = "timestamp"
+    AUTO = "auto"
+    UNORDERED = "unordered"
+
+
+class ImageValidationStatus(str, Enum):
+    """Image validation status."""
+    VALID = "valid"
+    INVALID = "invalid"
+    SKIPPED = "skipped"
+    DUPLICATE = "duplicate"
+
+
+class ImageProcessingStatus(str, Enum):
+    """Image processing status."""
+    PENDING = "pending"
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    CANCELLED = "cancelled"
+
+
+class ProcessingJobStatus(str, Enum):
+    """Processing job status."""
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    CANCELLED = "cancelled"
+
+
+class CollectionStatus(str, Enum):
+    """Image collection processing status."""
+    PENDING = "pending"
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    PARTIAL_SUCCESS = "partial_success"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+# V2.3A: Session and Collection enums
+class SessionStatus(str, Enum):
+    """Story session status."""
+    PENDING = "pending"
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    PARTIAL_SUCCESS = "partial_success"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class CollectionStatus(str, Enum):
+    """Image collection processing status."""
+    PENDING = "pending"
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    PARTIAL_SUCCESS = "partial_success"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class ImageOrderingMode(str, Enum):
+    """Image ordering modes for collections."""
+    UPLOAD_ORDER = "upload_order"
+    FILENAME = "filename"
+    TIMESTAMP = "timestamp"
+    AUTO = "auto"
+    UNORDERED = "unordered"
+
+
+class ImageValidationStatus(str, Enum):
+    """Image validation status."""
+    VALID = "valid"
+    INVALID = "invalid"
+    SKIPPED = "skipped"
+    DUPLICATE = "duplicate"
+
+
+class ImageProcessingStatus(str, Enum):
+    """Image processing status."""
+    PENDING = "pending"
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    CANCELLED = "cancelled"
+
+
+class ProcessingJobStatus(str, Enum):
+    """Processing job status."""
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    CANCELLED = "cancelled"
+
+
+class CollectionStatus(str, Enum):
+    """Image collection processing status."""
+    PENDING = "pending"
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    PARTIAL_SUCCESS = "partial_success"
+    FAILED = "failed"
+    CANCELLED = "cancelled"

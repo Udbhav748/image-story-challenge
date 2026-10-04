@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Main entry point for Image -> Story V2 pipeline."""
+"""Main entry point for Image -> Story V2 pipeline (with V2.3A collection support)."""
 import os
 import sys
 import json
@@ -22,6 +22,12 @@ from image_story import (
     settings,
 )
 from image_story.domain.schemas import PipelineArtifacts
+from image_story.collections import (
+    CollectionPipeline,
+    create_story_session,
+    CollectionPipelineConfig,
+    ProcessingConfig,
+)
 
 
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".bmp")
@@ -133,14 +139,75 @@ def run_multi_image(
     return artifacts
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Image -> Story V2 Pipeline")
+def run_collection_pipeline(
+    args,
+    config: PipelineConfig,
+    output_dir: str,
+) -> None:
+    """Run V2.3A collection pipeline."""
+    from image_story.collections import CollectionPipeline, CollectionPipelineConfig, ProcessingConfig
+    
+    # Create collection pipeline config
+    collection_config = CollectionPipelineConfig(
+        mode=args.mode,
+        ordering_mode=args.ordering,
+        processing=ProcessingConfig(
+            resume=args.resume,
+            retry_failed=args.retry_failed,
+            force_reprocess=False,
+        ),
+    )
+    
+    pipeline = CollectionPipeline(config=config, collection_config=collection_config)
+    
+    # Find images
+    images = find_images(args.paths)
+    if not images:
+        print("No images found")
+        return
+    
+    print(f"Found {len(images)} image(s)")
+    
+    # Create collection
+    image_paths = [img.path for img in images]
+    collection = pipeline.create_collection_from_paths(image_paths, ordering_mode=args.ordering)
+    print(f"Created collection {collection.collection_id} with {collection.total_images} images")
+    
+    # Create session
+    session = create_story_session(
+        [img.path for img in images],  # pass paths for session creation
+        config=config,
+        output_dir=args.output_dir,
+    )
+    
+    # Check for resume
+    if args.resume and args.session_id:
+        # TODO: Load existing session
+        print(f"Resuming session {args.session_id}")
+    
+    # Run pipeline
+    try:
+        result = pipeline.process_collection_with_resume(
+            images=[img.path for img in collection.images],
+            session=None,  # Will create new session
+            evaluate=True,
+            save_dir=args.output_dir,
+        )
+        
+        if result["success"]:
+            print(f"\nSession {result['session']['session_id']} completed successfully!")
+            print(f"Story: {result['result']['story'][:200]}...")
+        else:
+            print(f"\nSession failed: {result.get('error', 'Unknown error')}")
+    finally:
+        print("\nDone!")
+    parser = argparse.ArgumentParser(description="Image -> Story V2 Pipeline (V2.3A)")
     parser.add_argument("paths", nargs="+", help="Image files or directories")
     parser.add_argument(
         "--mode",
-        choices=["fast", "standard", "full", "baseline"],
+        choices=["fast", "standard", "full", "baseline", "collection"],
         default="standard",
-        help="Pipeline mode (default: standard)"
+        help="Pipeline mode (default: standard). 'collection' enables V2.3A collection pipeline."
     )
     parser.add_argument(
         "--multi",
@@ -173,6 +240,32 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["cpu", "cuda"],
         help="Device to use"
     )
+    # V2.3A: Collection pipeline options
+    parser.add_argument(
+        "--collection",
+        action="store_true",
+        help="Run V2.3A collection pipeline (process all images as one collection)"
+    )
+    parser.add_argument(
+        "--ordering",
+        choices=["auto", "upload_order", "filename", "timestamp"],
+        default="auto",
+        help="Image ordering mode for collections"
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume interrupted collection processing"
+    )
+    parser.add_argument(
+        "--retry-failed",
+        action="store_true",
+        help="Retry failed images in collection"
+    )
+    parser.add_argument(
+        "--session-id",
+        help="Resume specific session ID"
+    )
     return parser
 
 
@@ -193,7 +286,66 @@ def main():
     config.seed = args.seed
     config.device = args.device
     
-    print(f"Image -> Story V2 Pipeline")
+    print(f"Image -> Story V2 Pipeline (V2.3A)")
+    print(f"Mode: {config.mode}")
+    print(f"Device: {config.device}")
+    print(f"Seed: {config.seed}")
+    print(f"GroundingDINO: {config.use_grounding_dino}")
+    print(f"OCR: {config.use_ocr}")
+    print(f"FAISS: {config.use_faiss}")
+    print(f"Creative Planner: {config.use_creative_planner}")
+    print(f"Verification: {config.use_verification}")
+    
+    # Find images
+    images = find_images(args.paths)
+    if not images:
+        print("No images found")
+        return
+    
+    print(f"Found {len(images)} image(s)")
+    
+    # Handle different modes
+    if args.mode == "collection":
+        # V2.3A Collection pipeline
+        from image_story.collections import CollectionPipeline, CollectionPipelineConfig, ProcessingConfig
+        
+        collection_config = CollectionPipelineConfig(
+            mode=args.mode,
+            ordering_mode=args.ordering,
+            processing=ProcessingConfig(
+                resume=args.resume,
+                retry_failed=args.retry_failed,
+                force_reprocess=False,
+            ),
+        )
+        
+        pipeline = CollectionPipeline(config=config, collection_config=collection_config)
+        
+        # Create collection
+        image_paths = [img.path for img in images]
+        collection = pipeline.create_collection_from_paths(image_paths, ordering_mode=args.ordering)
+        print(f"Created collection {collection.collection_id} with {collection.total_images} images")
+        
+        # Run collection pipeline
+        try:
+            result = pipeline.process_collection_with_resume(
+                images=[img.path for img in images],
+                session=None,
+                evaluate=True,
+                save_dir=args.output_dir,
+            )
+            
+            if result["success"]:
+                print(f"\nSession {result['session']['session_id']} completed successfully!")
+                print(f"Story: {result['result']['story'][:200]}...")
+            else:
+                print(f"\nSession failed: {result.get('error', 'Unknown error')}")
+        finally:
+            print("\nDone!")
+        return
+    
+    # Existing single/multi image modes
+    print(f"Image -> Story V2 Pipeline (V2.3A)")
     print(f"Mode: {config.mode}")
     print(f"Device: {config.device}")
     print(f"Seed: {config.seed}")
