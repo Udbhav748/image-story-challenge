@@ -252,6 +252,28 @@ class RetrievalResult:
     query: str = ""
     retrieval_time_ms: float = 0.0
 
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for artifact persistence (provenance chain)."""
+        return {
+            "scenes": [s.to_dict() for s in self.scenes],
+            "evidence": [e.to_dict() for e in self.evidence],
+            "entities": [e.to_dict() for e in self.entities],
+            "transitions": [t.to_dict() for t in self.transitions],
+            "narrative_elements": [n.to_dict() for n in self.narrative_elements],
+            "query": self.query,
+            "retrieval_time_ms": self.retrieval_time_ms,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "RetrievalResult":
+        return cls(
+            scenes=[SceneSummary.from_dict(s) for s in data.get("scenes", [])],
+            evidence=[EvidenceRecord.from_dict(e) for e in data.get("evidence", [])],
+            entities=[EntityMemory.from_dict(e) for e in data.get("entities", [])],
+            query=data.get("query", ""),
+            retrieval_time_ms=data.get("retrieval_time_ms", 0.0),
+        )
+
 
 class MemoryLevel(str):
     """Memory abstraction levels."""

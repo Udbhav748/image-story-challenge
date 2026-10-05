@@ -93,11 +93,16 @@ class CollectionMemoryBuilder:
             entity_memories, scenes, transitions, observations, world_state
         )
         
+        # Convert entity_memories to use normalized_label as key for global_entities
+        global_entities = {}
+        for entity_mem in entity_memories.values():
+            global_entities[entity_mem.normalized_label] = entity_mem
+        
         # 7. Create collection memory
         collection = CollectionMemory(
             collection_id=self._collection_id,
             scene_summaries=scenes,
-            global_entities=entity_memories,
+            global_entities=global_entities,
             state_transitions=transitions,
             narrative_elements=narrative_elements,
             total_images=len(observations),
@@ -177,7 +182,7 @@ class CollectionMemoryBuilder:
 
 def create_collection_memory_builder(
     device: str = "cpu",
-    similarity_threshold: float = 0.65,
+    similarity_threshold: float = 0.99,
     top_k_scenes: int = 5,
     top_k_evidence_per_scene: int = 10,
 ) -> CollectionMemoryBuilder:

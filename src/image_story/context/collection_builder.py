@@ -287,6 +287,22 @@ class CollectionContextBuilder(ContextBuilder):
         
         return facts
     
+    def build_multi_scene_prompt(
+        self,
+        context: str,
+        creative_plan: CreativePlan | None = None,
+        target_words: int = 250,
+    ) -> str:
+        """
+        Build a story prompt from collection context.
+        """
+        parts = [f"Write a {creative_plan.genre if creative_plan else 'whimsical'} {creative_plan.tone if creative_plan else 'comedic'} story of approximately {target_words} words."]
+        parts.append("")
+        parts.append(context)
+        parts.append("")
+        parts.append("Write the story now:")
+        return "\n".join(parts)
+    
     def build_single_image_fallback(
         self,
         observation: VisualObservations,

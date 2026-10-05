@@ -172,17 +172,6 @@ class ImageCollection:
         )
 
 
-class ProcessingConfig:
-    """Configuration for collection processing."""
-    resume: bool = True
-    retry_failed: bool = True
-    force_reprocess: bool = False
-    skip_validation: bool = False
-    skip_deduplication: bool = False
-    max_retries: int = 3
-    retry_delay_seconds: float = 1.0
-
-
 @dataclass
 class ProcessingJob:
     """A processing job for a single image or batch."""
@@ -322,31 +311,3 @@ class CacheEntry:
             accessed_at=data.get("accessed_at", datetime.now().isoformat()),
             access_count=data.get("access_count", 0),
         )
-
-
-class ProcessingConfig:
-    """Configuration for collection processing."""
-    resume: bool = True
-    retry_failed: bool = True
-    force_reprocess: bool = False
-    skip_validation: bool = False
-    skip_deduplication: bool = False
-    max_retries: int = 3
-    retry_delay_seconds: float = 1.0
-    batch_size: int = 1
-    max_concurrent: int = 1
-
-
-@dataclass
-class CollectionPipelineConfig:
-    """Configuration for the collection pipeline."""
-    mode: str = "standard"
-    ordering_mode: str = "auto"
-    processing: ProcessingConfig = field(default_factory=ProcessingConfig)
-    pipeline_config: dict[str, Any] = field(default_factory=dict)
-    cache_dir: str = "cache"
-    artifacts_dir: str = "artifacts"
-    max_images: int = 1000
-    skip_validation: bool = False
-    skip_deduplication: bool = False
-    max_images_per_batch: int = 10

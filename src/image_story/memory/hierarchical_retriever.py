@@ -147,6 +147,26 @@ class HierarchicalRetriever:
         
         return [s for s, _ in filtered[:self._config.top_k_scenes]]
     
+    def _retrieve_scenes_by_embedding_with_fallback(
+        self,
+        query_embedding: np.ndarray,
+    ) -> list[SceneSummary]:
+        """Retrieve scenes with fallback to top-k if none pass threshold."""
+        scenes = self._retrieve_scenes_by_embedding(query_embedding)
+        if not scenes and self._collection_memory:
+            # Fallback: return top scenes by similarity
+            scene_similarities = []
+            for scene in self._collection_memory.scene_summaries:
+                if scene.embedding is not None:
+                    sim = float(np.dot(query_embedding, scene.embedding) / 
+                               (np.linalg.norm(query_embedding) * np.linalg.norm(scene.embedding) + 1e-8))
+                else:
+                    sim = 0.0
+                scene_similarities.append((scene, sim))
+            scene_similarities.sort(key=lambda x: x[1], reverse=True)
+            scenes = [s for s, _ in scene_similarities[:self._config.top_k_scenes]]
+        return scenes
+    
     def _retrieve_evidence_from_scene(
         self,
         scene: SceneSummary,
@@ -357,13 +377,14 @@ class HierarchicalRetriever:
         include_trans = include_transitions if include_transitions is not None else self._config.include_transitions
         include_narr = include_narrative if include_narrative is not None else self._config.include_narrative_elements
         
-        # Retrieve scenes
-        scenes = self.retrieve_scenes(query, top_k_scenes)
+        # Retrieve scenes with fallback for low-similarity cases
+        query_embedding = self._embedding_model.encode_single(query)
+        scenes = self._retrieve_scenes_by_embedding_with_fallback(query_embedding)[:top_k_scenes]
         
         # Retrieve evidence from scenes
         all_evidence = []
         for scene in scenes:
-            scene_evidence = self._retrieve_evidence_from_scene(scene, query, top_k_evidence)
+            scene_evidence = self._retrieve_evidence_from_scene(scene, query, top_k_evidence, None)
             all_evidence.extend(scene_evidence)
         
         # Deduplicate

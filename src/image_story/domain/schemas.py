@@ -3,7 +3,7 @@
 Structured, typed data contracts for all pipeline stages.
 """
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from typing import Any, Literal
 import uuid
 import time
@@ -496,15 +496,6 @@ class ImageCollection:
         )
 
 
-class ProcessingConfig:
-    """Configuration for collection processing."""
-    resume: bool = True
-    retry_failed: bool = True
-    force_reprocess: bool = False
-    skip_validation: bool = False
-    skip_deduplication: bool = False
-    max_retries: int = 3
-    retry_delay_seconds: float = 1.0
 
 
 @dataclass
@@ -560,15 +551,6 @@ class ProcessingJob:
         )
 
 
-class ProcessingConfig:
-    """Configuration for collection processing."""
-    resume: bool = True
-    retry_failed: bool = True
-    force_reprocess: bool = False
-    skip_validation: bool = False
-    skip_deduplication: bool = False
-    max_retries: int = 3
-    retry_delay_seconds: float = 1.0
 
 
 @dataclass
@@ -658,6 +640,7 @@ class CacheEntry:
         )
 
 
+@dataclass
 class ProcessingConfig:
     """Configuration for collection processing."""
     resume: bool = True
@@ -682,6 +665,11 @@ class CollectionPipelineConfig:
     skip_validation: bool = False
     skip_deduplication: bool = False
     max_images_per_batch: int = 10
+
+    def to_dict(self) -> dict[str, Any]:
+        result = asdict(self)
+        result["processing"] = asdict(self.processing)
+        return result
 
 
 @dataclass
@@ -833,6 +821,14 @@ class PipelineConfig:
     max_evidence_per_frame: int = 50
     faiss_top_k: int = 10
     context_max_words: int = 500
+    # V2.3: Hierarchical memory configuration
+    scene_similarity_threshold: float = 0.65
+    max_scene_size: int = 20
+    top_k_scenes: int = 5
+    top_k_evidence_per_scene: int = 10
+    scene_retrieval_threshold: float = 0.5
+    evidence_retrieval_threshold: float = 0.4
+    max_scenes_in_context: int = 5
     target_story_words: int = 250
     creativity_config: dict[str, float] = field(default_factory=lambda: {
         "creativity": 0.7,
@@ -866,6 +862,13 @@ class PipelineConfig:
                 use_creative_planner=False,
                 use_verification=False,
                 target_story_words=100,
+                scene_similarity_threshold=0.65,
+                max_scene_size=20,
+                top_k_scenes=3,
+                top_k_evidence_per_scene=5,
+                scene_retrieval_threshold=0.5,
+                evidence_retrieval_threshold=0.4,
+                max_scenes_in_context=3,
                 creative_budget={
                     "safe_creative": {"max": 2, "used": 0},
                     "risky_inferred": {"max": 1, "used": 0},
@@ -881,6 +884,13 @@ class PipelineConfig:
                 use_creative_planner=True,
                 use_verification=True,
                 target_story_words=250,
+                scene_similarity_threshold=0.65,
+                max_scene_size=20,
+                top_k_scenes=5,
+                top_k_evidence_per_scene=10,
+                scene_retrieval_threshold=0.5,
+                evidence_retrieval_threshold=0.4,
+                max_scenes_in_context=5,
                 creative_budget={
                     "safe_creative": {"max": 8, "used": 0},
                     "risky_inferred": {"max": 3, "used": 0},
@@ -905,6 +915,13 @@ class PipelineConfig:
                     "dialogue": 0.5,
                     "metaphor": 0.4,
                 },
+                scene_similarity_threshold=0.65,
+                max_scene_size=20,
+                top_k_scenes=7,
+                top_k_evidence_per_scene=15,
+                scene_retrieval_threshold=0.5,
+                evidence_retrieval_threshold=0.4,
+                max_scenes_in_context=7,
                 creative_budget={
                     "safe_creative": {"max": 10, "used": 0},
                     "risky_inferred": {"max": 4, "used": 0},
@@ -929,9 +946,38 @@ class PipelineConfig:
                     "dialogue": 0.2,
                     "metaphor": 0.1,
                 },
+                scene_similarity_threshold=0.65,
+                max_scene_size=20,
+                top_k_scenes=3,
+                top_k_evidence_per_scene=5,
+                scene_retrieval_threshold=0.5,
+                evidence_retrieval_threshold=0.4,
+                max_scenes_in_context=3,
                 creative_budget={
                     "safe_creative": {"max": 2, "used": 0},
                     "risky_inferred": {"max": 1, "used": 0},
+                    "forbidden_visual": {"max": 0, "used": 0},
+                },
+            )
+        elif mode == "collection":
+            return cls(
+                mode="collection",
+                use_grounding_dino=True,
+                use_ocr=False,
+                use_faiss=True,
+                use_creative_planner=True,
+                use_verification=True,
+                target_story_words=300,
+                scene_similarity_threshold=0.65,
+                max_scene_size=20,
+                top_k_scenes=10,
+                top_k_evidence_per_scene=20,
+                scene_retrieval_threshold=0.5,
+                evidence_retrieval_threshold=0.4,
+                max_scenes_in_context=10,
+                creative_budget={
+                    "safe_creative": {"max": 10, "used": 0},
+                    "risky_inferred": {"max": 4, "used": 0},
                     "forbidden_visual": {"max": 0, "used": 0},
                 },
             )
@@ -949,6 +995,13 @@ class PipelineConfig:
             "max_evidence_per_frame": self.max_evidence_per_frame,
             "faiss_top_k": self.faiss_top_k,
             "context_max_words": self.context_max_words,
+            "scene_similarity_threshold": self.scene_similarity_threshold,
+            "max_scene_size": self.max_scene_size,
+            "top_k_scenes": self.top_k_scenes,
+            "top_k_evidence_per_scene": self.top_k_evidence_per_scene,
+            "scene_retrieval_threshold": self.scene_retrieval_threshold,
+            "evidence_retrieval_threshold": self.evidence_retrieval_threshold,
+            "max_scenes_in_context": self.max_scenes_in_context,
             "target_story_words": self.target_story_words,
             "creativity_config": self.creativity_config,
             "creative_budget": self.creative_budget,
@@ -1008,6 +1061,9 @@ class PipelineArtifacts:
     evaluation: EvaluationResult | None = None
     runtime: dict[str, float] = field(default_factory=dict)
     logs: list[str] = field(default_factory=list)
+    # V2.3: Collection memory artifacts
+    collection_memory: "CollectionMemory | None" = field(default=None, repr=False)
+    retrieval_result: "RetrievalResult | None" = field(default=None, repr=False)
     
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -1026,4 +1082,6 @@ class PipelineArtifacts:
             "evaluation": self.evaluation.to_dict() if self.evaluation else None,
             "runtime": self.runtime,
             "logs": self.logs,
+            "collection_memory": self.collection_memory.to_dict() if self.collection_memory else None,
+            "retrieval_result": self.retrieval_result.to_dict() if self.retrieval_result else None,
         }

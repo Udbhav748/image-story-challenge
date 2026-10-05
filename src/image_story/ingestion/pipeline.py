@@ -56,11 +56,11 @@ class IngestionPipeline:
                     skipped += 1
                 continue
             
-            status, error = self.validator.validate(image_record)
-            image_record.validation_status = status
-            image_record.error = error
-            image_record.processing_status = "completed" if status == "valid" else "failed"
-            image_record.updated_at = datetime.now().isoformat()
+            status, error = self.validator.validate(image)
+            image.validation_status = status
+            image.error = error
+            image.processing_status = "completed" if status == "valid" else "failed"
+            image.updated_at = datetime.now().isoformat()
             
             if status == "valid":
                 valid += 1
@@ -86,10 +86,10 @@ class IngestionPipeline:
                 skipped += 1
                 continue
             
-            content_hash, perceptual_hash = self.hasher.compute_hashes(image_record)
-            image_record.content_hash = content_hash
-            image_record.perceptual_hash = perceptual_hash
-            image_record.updated_at = datetime.now().isoformat()
+            content_hash, perceptual_hash = self.hasher.compute_hashes(image)
+            image.content_hash = content_hash
+            image.perceptual_hash = perceptual_hash
+            image.updated_at = datetime.now().isoformat()
             computed += 1
         
         return computed, skipped
@@ -108,11 +108,11 @@ class IngestionPipeline:
             # Check exact duplicate
             duplicate_of = self.deduplicator.check_exact_duplicate(image.content_hash)
             if duplicate_of and duplicate_of != image.image_id:
-                image_record.validation_status = "duplicate"
-                image_record.duplicate_of = duplicate_of
-                image_record.processing_status = "completed"
-                image_record.updated_at = datetime.now().isoformat()
-                image_record.metadata["duplicate_of"] = duplicate_of
+                image.validation_status = "duplicate"
+                image.duplicate_of = duplicate_of
+                image.processing_status = "completed"
+                image.updated_at = datetime.now().isoformat()
+                image.metadata["duplicate_of"] = duplicate_of
                 # Register the image anyway for near-duplicate detection
                 self.deduplicator.register_image(image.image_id, image.content_hash, image.perceptual_hash)
                 continue
@@ -122,7 +122,7 @@ class IngestionPipeline:
                 image.perceptual_hash, exclude_id=image.image_id
             )
             if similar:
-                image_record.similar_to = [img_id for img_id, _ in similar]
+                image.similar_to = [img_id for img_id, _ in similar]
                 near_duplicates += 1
             
             # Register this image

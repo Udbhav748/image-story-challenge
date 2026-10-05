@@ -340,8 +340,10 @@ class FAISSVectorStore:
         """Get evidence by internal index ID."""
         return self._evidence_map.get(index_id)
     
-    def get_indexed_evidence(self, index_id: int) -> IndexedEvidenceRecord | None:
-        """Get indexed evidence with full provenance by internal index ID."""
+    def get_indexed_evidence(self, index_id: int | str) -> IndexedEvidenceRecord | None:
+        """Get indexed evidence with full provenance by internal index ID or evidence ID."""
+        if isinstance(index_id, str):
+            return self.get_indexed_evidence_by_id(index_id)
         return self._indexed_evidence.get(index_id)
     
     def get_evidence_by_id(self, evidence_id: str) -> EvidenceRecord | None:

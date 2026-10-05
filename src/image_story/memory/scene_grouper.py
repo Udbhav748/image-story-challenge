@@ -341,6 +341,8 @@ class SceneGrouper:
             parts.append(f"Actions: {', '.join(obs.actions)}")
         if obs.style_or_mood:
             parts.append(f"Mood: {obs.style_or_mood}")
+        # Include frame_id to differentiate sequential frames with identical content
+        parts.append(f"Frame: {obs.frame_id}")
         return " | ".join(parts)
     
     def _merge_observations_to_text(self, observations: list[VisualObservations]) -> str:

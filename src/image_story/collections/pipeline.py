@@ -63,6 +63,7 @@ class CollectionPipeline:
         config: PipelineConfig | None = None,
         evaluate: bool = True,
         save_dir: str | None = None,
+        use_collection_memory: bool = False,
     ) -> dict[str, Any]:
         """
         Process an image collection through the full pipeline:
@@ -94,10 +95,16 @@ class CollectionPipeline:
         
         # Run story generation pipeline
         pipeline_start = datetime.now()
-        artifacts = self._orchestrator.run_multi_image(
-            image_paths, 
-            evaluate=evaluate,
-        )
+        if use_collection_memory:
+            artifacts = orchestrator.run_collection(
+                image_paths,
+                evaluate=evaluate,
+            )
+        else:
+            artifacts = orchestrator.run_multi_image(
+                image_paths, 
+                evaluate=evaluate,
+            )
         generation_time = (datetime.now() - pipeline_start).total_seconds()
         
         # Create session record
@@ -133,6 +140,7 @@ class CollectionPipeline:
         session: StorySession | None = None,
         evaluate: bool = True,
         save_dir: str | None = None,
+        use_collection_memory: bool = False,
     ) -> dict[str, Any]:
         """
         Process a collection with resume capability.
@@ -151,7 +159,7 @@ class CollectionPipeline:
         session.updated_at = datetime.now().isoformat()
         
         try:
-            result = self.process_collection(collection, evaluate=evaluate, save_dir=save_dir)
+            result = self.process_collection(collection, evaluate=evaluate, save_dir=save_dir, use_collection_memory=use_collection_memory)
             
             session.status = "completed" if result["success"] else "failed"
             session.completed_at = datetime.now().isoformat()

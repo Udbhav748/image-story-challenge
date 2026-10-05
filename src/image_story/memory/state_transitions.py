@@ -46,9 +46,17 @@ class StateTransitionDetector:
         scene_to_obs = defaultdict(list)
         for obs in observations:
             for scene in sorted_scenes:
-                if obs.frame_id in scene.frame_indices:
-                    scene_to_obs[scene.scene_id].append(obs)
-                    break
+                # Check frame_indices first, fallback to start_frame/end_frame range
+                frame_indices = scene.frame_indices
+                if frame_indices:
+                    if obs.frame_id in frame_indices:
+                        scene_to_obs[scene.scene_id].append(obs)
+                        break
+                else:
+                    # Fallback: check if frame_id is within scene's frame range
+                    if scene.start_frame <= obs.frame_id <= scene.end_frame:
+                        scene_to_obs[scene.scene_id].append(obs)
+                        break
         
         for entity_id, entity_mem in entity_memories.items():
             entity_transitions = self._detect_entity_transitions(
@@ -275,12 +283,20 @@ class StateTransitionDetector:
         attrs = {"actions": [], "relationships": []}
         
         for obs in scene_to_obs.get(scene_id, []):
+            # Check if this observation contains the entity
+            has_entity = any(e.entity == entity_mem.normalized_label for e in obs.evidence_records)
+            if not has_entity:
+                continue
+            
+            # Collect all actions and relationships from this observation
             for evidence in obs.evidence_records:
-                if evidence.entity == entity_mem.normalized_label:
-                    if evidence.action:
-                        attrs["actions"].append(evidence.action)
-                    if evidence.relationship:
-                        attrs["relationships"].append(evidence.relationship)
+                # For ACTION type evidence, the action is stored in entity field
+                if evidence.type.value == "action" and evidence.entity:
+                    attrs["actions"].append(evidence.entity)
+                elif evidence.action:
+                    attrs["actions"].append(evidence.action)
+                if evidence.relationship:
+                    attrs["relationships"].append(evidence.relationship)
         
         return attrs
     

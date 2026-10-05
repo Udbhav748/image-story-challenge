@@ -44,6 +44,7 @@ class PipelineMode(str, Enum):
     STANDARD = "standard"
     FULL = "full"
     BASELINE = "baseline"
+    COLLECTION = "collection"
 
 
 class VisionTask(str, Enum):

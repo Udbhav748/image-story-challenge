@@ -78,13 +78,35 @@ class CreativePlanner:
         world_state: WorldState,
         observations: list[VisualObservations],
         ranked_evidence: list[RetrievedEvidence],
+        collection_memory: "CollectionMemory | None" = None,
+        retrieval_result: "RetrievalResult | None" = None,
     ) -> CreativePlan:
-        """Create a comprehensive creative plan for the story."""
+        """Create a comprehensive creative plan for the story.
+        
+        Args:
+            world_state: Current world state
+            observations: Visual observations
+            ranked_evidence: Ranked evidence for grounding
+            collection_memory: Optional V2.3 collection memory for enhanced planning
+            retrieval_result: Optional V2.3 hierarchical retrieval result
+        """
         
         # Extract hard facts and soft inferences from evidence
         hard_facts = self._extract_hard_facts(ranked_evidence)
         soft_inferences = self._extract_soft_inferences(ranked_evidence)
         locked_facts = self._extract_locked_facts(ranked_evidence)
+        
+        # V2.3: Enhance with collection memory if available
+        if collection_memory:
+            # Add recurring entities to hard facts
+            for entity_label, entity_mem in collection_memory.global_entities.items():
+                if len(entity_mem.scene_ids) > 1:
+                    hard_facts.append(f"Recurring {entity_mem.entity_type}: {entity_label} (scenes: {len(entity_mem.scene_ids)})")
+            
+            # Add state transitions to soft inferences
+            for transition in collection_memory.state_transitions:
+                if transition.transition_type in ("disappeared", "reappeared", "moved"):
+                    soft_inferences.append(f"{transition.entity_label} {transition.transition_type}: {transition.description}")
         
         # Generate character profiles
         characters = self._character_system.generate_profiles(
@@ -111,8 +133,11 @@ class CreativePlanner:
         # Identify open loops
         open_loops = [loop.get("description", "") for loop in world_state.open_loops]
         
-        # Plan callbacks (using FAISS/world state memory)
-        callback_plan = self._plan_callbacks(observations, world_state)
+        # V2.3: Plan callbacks using collection memory if available
+        if collection_memory and retrieval_result:
+            callback_plan = self._plan_callbacks_v23(collection_memory, retrieval_result)
+        else:
+            callback_plan = self._plan_callbacks(observations, world_state)
         
         # Design narrative arc
         narrative_arc = self._design_narrative_arc(conflict, surprise, open_loops)
@@ -185,79 +210,6 @@ class CreativePlanner:
             ev = item.record
             parts.append(f"{ev.entity} ({ev.type.value}): {ev.evidence_text[:80]}")
         return "; ".join(parts)
-    
-    def _extract_soft_inferences(
-        self,
-        observations: list[VisualObservations],
-        ranked_evidence: list[RetrievedEvidence],
-    ) -> list[str]:
-        """Legacy method - kept for compatibility."""
-        return self._extract_soft_inferences(ranked_evidence)
-    
-    def _extract_locked_facts(
-        self,
-        observations: list[VisualObservations],
-        ranked_evidence: list[RetrievedEvidence],
-    ) -> list[str]:
-        """Legacy method - kept for compatibility."""
-        return self._extract_locked_facts(ranked_evidence)
-    
-    def create_creative_plan(
-        self,
-        world_state: WorldState,
-        observations: list[VisualObservations],
-        ranked_evidence: list[RetrievedEvidence],
-    ) -> CreativePlan:
-        """Create a comprehensive creative plan for the story."""
-        
-        # Generate character profiles
-        characters = self._character_system.generate_profiles(
-            world_state, self._genre, self._tone
-        )
-        
-        # Generate central conflict
-        evidence_summary = self._summarize_evidence(ranked_evidence)
-        conflict = self._conflict_engine.generate_conflict(
-            world_state, evidence_summary, self._genre.value
-        )
-        
-        # Generate humor moments
-        humor_moments = self._humor_engine.generate_humor_moments(
-            world_state, conflict, HumorStyle.SITUATIONAL, count=2
-        )
-        
-        # Generate surprise/twist
-        foreshadowing = self._identify_foreshadowing_opportunities(observations, world_state)
-        surprise = self._surprise_engine.generate_surprise(
-            world_state, evidence_summary, foreshadowing
-        )
-        
-        # Identify open loops
-        open_loops = [loop.get("description", "") for loop in world_state.open_loops]
-        
-        # Plan callbacks
-        callback_plan = self._plan_callbacks(observations, world_state)
-        
-        # Design narrative arc
-        narrative_arc = self._design_narrative_arc(conflict, surprise, open_loops)
-        
-        return CreativePlan(
-            genre=self._genre.value,
-            tone=self._tone.value,
-            creativity_level=self._creativity_config.get("creativity", 0.7),
-            surprise_level=self._creativity_config.get("surprise", 0.6),
-            humor_level=self._creativity_config.get("humor", 0.5),
-            mystery_level=self._creativity_config.get("mystery", 0.4),
-            emotion_level=self._creativity_config.get("emotion", 0.5),
-            dialogue_level=self._creativity_config.get("dialogue", 0.4),
-            metaphor_level=self._creativity_config.get("metaphor", 0.3),
-            characters=characters,
-            central_conflict=conflict,
-            open_loops=open_loops,
-            foreshadowing_elements=foreshadowing,
-            callback_plan=callback_plan,
-            narrative_arc=narrative_arc,
-        )
     
     def create_story_plan(
         self,
@@ -347,13 +299,6 @@ class CreativePlanner:
             target_total_words=target_words,
         )
     
-    def _summarize_evidence(self, ranked_evidence: list[RetrievedEvidence]) -> str:
-        parts = []
-        for item in ranked_evidence[:10]:
-            ev = item.record
-            parts.append(f"{ev.entity} ({ev.type.value}): {ev.evidence_text[:80]}")
-        return "; ".join(parts)
-    
     def _identify_foreshadowing_opportunities(
         self,
         observations: list[VisualObservations],
@@ -419,6 +364,38 @@ class CreativePlanner:
                 "description": f"Recurring {entity.entity_type}: {entity.label} appears in frames {entity.frames_present}",
                 "payoff_frame": entity.frames_present[-1] if entity.frames_present else 0,
             })
+        
+        return callbacks
+    
+    def _plan_callbacks_v23(
+        self,
+        collection_memory: "CollectionMemory",
+        retrieval_result: "RetrievalResult",
+    ) -> list[dict[str, Any]]:
+        """Plan callbacks using V2.3 collection memory and hierarchical retrieval."""
+        callbacks = []
+        
+        # Use narrative elements from retrieval result for callbacks
+        for elem in retrieval_result.narrative_elements[:3]:
+            if elem.potential_callback or elem.element_type == "open_loop":
+                callbacks.append({
+                    "element": elem.label,
+                    "type": elem.element_type,
+                    "description": elem.description,
+                    "payoff_scene": elem.callback_payoff_scene,
+                    "importance": elem.narrative_importance,
+                })
+        
+        # Also use recurring entities from collection memory
+        for entity_label, entity_mem in collection_memory.global_entities.items():
+            if len(entity_mem.scene_ids) > 1 and len(callbacks) < 5:
+                callbacks.append({
+                    "element": entity_label,
+                    "type": f"recurring_{entity_mem.entity_type}",
+                    "description": f"Recurring {entity_mem.entity_type}: {entity_label} appears in {len(entity_mem.scene_ids)} scenes",
+                    "payoff_scene": entity_mem.last_seen_scene,
+                    "importance": 0.7,
+                })
         
         return callbacks
     

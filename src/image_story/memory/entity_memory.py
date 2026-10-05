@@ -52,6 +52,9 @@ class EntityMemoryTracker:
         # Then enhance with scene-level information
         self._enhance_with_scenes(entity_memories, scenes, observations)
         
+        # Enhance with world state recurring entity frames
+        self._enhance_with_world_state(entity_memories, scenes, world_state)
+        
         # Merge similar entities across scenes
         entity_memories = self._merge_similar_entities(entity_memories)
         
@@ -159,6 +162,45 @@ class EntityMemoryTracker:
                     for evidence in evidence_list:
                         if evidence.bbox:
                             entity_mem.bounding_boxes[scene_id] = evidence.bbox.to_list()
+
+    def _enhance_with_world_state(
+        self,
+        entity_memories: dict[str, EntityMemory],
+        scenes: list[SceneSummary],
+        world_state: WorldState,
+    ) -> None:
+        """Enhance entity memories with world state recurring entity frames."""
+        # Build frame to scene mapping
+        frame_to_scene = {}
+        for scene in scenes:
+            for frame_idx in scene.frame_indices:
+                frame_to_scene[frame_idx] = scene.scene_id
+        
+        # Process world state entities for recurring frames
+        for entity in world_state.get_all_entities():
+            if not entity.is_recurring:
+                continue
+            
+            normalized = self._normalize_label(entity.label)
+            entity_id = self._label_to_entity_id.get(normalized)
+            if not entity_id or entity_id not in entity_memories:
+                continue
+            
+            entity_mem = entity_memories[entity_id]
+            
+            # Add scenes for all frames where entity is present
+            for frame_idx in entity.frames_present:
+                scene_id = frame_to_scene.get(frame_idx)
+                if scene_id and scene_id not in entity_mem.scene_ids:
+                    entity_mem.scene_ids.append(scene_id)
+                    # Update first/last seen
+                    if not entity_mem.first_seen_scene or scene_id < entity_mem.first_seen_scene:
+                        entity_mem.first_seen_scene = scene_id
+                    if not entity_mem.last_seen_scene or scene_id > entity_mem.last_seen_scene:
+                        entity_mem.last_seen_scene = scene_id
+            
+            # Sort scene_ids
+            entity_mem.scene_ids.sort()
     
     def _determine_entity_type(self, evidence_list: list[EvidenceRecord]) -> str:
         """Determine entity type from evidence."""
@@ -225,10 +267,8 @@ class EntityMemoryTracker:
                 if self._normalize_label(alias1) == self._normalize_label(alias2):
                     return True
         
-        # Check scene overlap
-        scene_overlap = set(e1.scene_ids) & set(e2.scene_ids)
-        if scene_overlap:
-            return True
+        # Do NOT merge based on scene overlap alone - different entities can appear in same scene
+        # Only merge if labels/aliases match
         
         return False
     

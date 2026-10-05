@@ -145,17 +145,20 @@ def run_collection_pipeline(
     output_dir: str,
 ) -> None:
     """Run V2.3A collection pipeline."""
-    from image_story.collections import CollectionPipeline, CollectionPipelineConfig, ProcessingConfig
+    from image_story.collections import CollectionPipeline, CollectionPipelineConfig
+    from image_story.domain.schemas import ProcessingConfig
     
     # Create collection pipeline config
+    # Use default ProcessingConfig factory, then customize
+    processing = ProcessingConfig()
+    processing.resume = args.resume
+    processing.retry_failed = args.retry_failed
+    processing.force_reprocess = False
+    
     collection_config = CollectionPipelineConfig(
         mode=args.mode,
         ordering_mode=args.ordering,
-        processing=ProcessingConfig(
-            resume=args.resume,
-            retry_failed=args.retry_failed,
-            force_reprocess=False,
-        ),
+        processing=processing,
     )
     
     pipeline = CollectionPipeline(config=config, collection_config=collection_config)
@@ -269,6 +272,80 @@ def run_collection_pipeline(
     return parser
 
 
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Image -> Story V2 Pipeline (V2.3A)")
+    parser.add_argument("paths", nargs="+", help="Image files or directories")
+    parser.add_argument(
+        "--mode",
+        choices=["fast", "standard", "full", "baseline", "collection"],
+        default="standard",
+        help="Pipeline mode (default: standard). 'collection' enables V2.3A collection pipeline."
+    )
+    parser.add_argument(
+        "--multi",
+        action="store_true",
+        help="Generate one story across all images (sequence mode)"
+    )
+    parser.add_argument(
+        "--no-eval",
+        action="store_true",
+        help="Skip evaluation"
+    )
+    parser.add_argument(
+        "--output-dir",
+        default="artifacts",
+        help="Output directory for artifacts"
+    )
+    parser.add_argument(
+        "--config",
+        help="Path to custom config YAML"
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help="Random seed"
+    )
+    parser.add_argument(
+        "--device",
+        default="cpu",
+        choices=["cpu", "cuda"],
+        help="Device to use"
+    )
+    # V2.3A: Collection pipeline options
+    parser.add_argument(
+        "--collection",
+        action="store_true",
+        help="Run V2.3A collection pipeline (process all images as one collection)"
+    )
+    parser.add_argument(
+        "--collection-memory",
+        action="store_true",
+        help="Enable V2.3B hierarchical collection memory (scenes, entities, transitions, narrative)"
+    )
+    parser.add_argument(
+        "--ordering",
+        choices=["auto", "upload_order", "filename", "timestamp"],
+        default="auto",
+        help="Image ordering mode for collections"
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume interrupted collection processing"
+    )
+    parser.add_argument(
+        "--retry-failed",
+        action="store_true",
+        help="Retry failed images in collection"
+    )
+    parser.add_argument(
+        "--session-id",
+        help="Resume specific session ID"
+    )
+    return parser
+
+
 def main():
     args = build_parser().parse_args()
     
@@ -305,34 +382,39 @@ def main():
     print(f"Found {len(images)} image(s)")
     
     # Handle different modes
-    if args.mode == "collection":
-        # V2.3A Collection pipeline
-        from image_story.collections import CollectionPipeline, CollectionPipelineConfig, ProcessingConfig
+    use_collection_memory = getattr(args, 'collection_memory', False)
+    
+    if args.mode == "collection" or use_collection_memory:
+        # V2.3A Collection pipeline with V2.3B memory
+        from image_story.collections import CollectionPipeline, CollectionPipelineConfig
+        from image_story.domain.schemas import ProcessingConfig
+        
+        processing = ProcessingConfig()
+        processing.resume = args.resume
+        processing.retry_failed = args.retry_failed
+        processing.force_reprocess = False
         
         collection_config = CollectionPipelineConfig(
             mode=args.mode,
             ordering_mode=args.ordering,
-            processing=ProcessingConfig(
-                resume=args.resume,
-                retry_failed=args.retry_failed,
-                force_reprocess=False,
-            ),
+            processing=processing,
         )
         
         pipeline = CollectionPipeline(config=config, collection_config=collection_config)
         
         # Create collection
-        image_paths = [img.path for img in images]
+        image_paths = images
         collection = pipeline.create_collection_from_paths(image_paths, ordering_mode=args.ordering)
         print(f"Created collection {collection.collection_id} with {collection.total_images} images")
         
         # Run collection pipeline
         try:
             result = pipeline.process_collection_with_resume(
-                images=[img.path for img in images],
+                collection=collection,
                 session=None,
-                evaluate=True,
+                evaluate=not args.no_eval,
                 save_dir=args.output_dir,
+                use_collection_memory=use_collection_memory,
             )
             
             if result["success"]:

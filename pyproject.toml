@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "image-story-v2"
-version = "2.0.0"
-description = "Grounded Creative Multimodal Storytelling System"
-readme = "README.md"
+version = "2.3.0"
+description = "Scalable hierarchical evidence-grounded image-to-story system"
+readme = "README_V2.md"
 authors = [{name = "Image → Story Team"}]
 license = {text = "MIT"}
 requires-python = ">=3.10"
