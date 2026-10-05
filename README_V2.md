@@ -4,6 +4,16 @@
 processing, scene/entity memory, hierarchical retrieval, grounded creativity, claim
 verification and evaluation.
 
+## Documentation
+
+| Document | Purpose |
+|---|---|
+| [docs/V2.3_ARCHITECTURE.md](docs/V2.3_ARCHITECTURE.md) | Full architecture: diagrams, runtime call graph, domain contracts, configuration, measured scale, limitations |
+| [docs/DEVELOPER_HANDOFF.md](docs/DEVELOPER_HANDOFF.md) | New-developer orientation (read time: under 30 minutes) |
+| [docs/COLLABORATION_CONTRACT.md](docs/COLLABORATION_CONTRACT.md) | Ownership boundaries, shared contracts, branch strategy, development rules |
+| [docs/V3_ROADMAP.md](docs/V3_ROADMAP.md) | Proposed future roadmap — **not implemented** |
+| [VALIDATION_REPORT_V22.md](VALIDATION_REPORT_V22.md) | V2.2 validation evidence |
+
 ## Architecture Overview
 
 The current production path for image collections (V2.3):
@@ -60,6 +70,19 @@ retriever on the collection path.
 - **Hard Facts**: Directly supported by visual evidence (locked)
 - **Soft Inferences**: Reasonable interpretations (qualified)
 - **Creative Space**: Narrative invention allowed (personalities, motivations, dialogue, humor, twists)
+
+### What each version added
+
+| Version | Adds |
+|---|---|
+| **V2.2** | Grounded creativity: OBSERVED / INFERRED / CREATIVE claim classification, risk-aware creative budget (`8 / 3 / 0`), locked visual facts, grounded humor and surprise, targeted minimal repair, claim verification |
+| **V2.3A** | Scalable collections: `StorySession`, `ImageCollection`, `ImageRecord`, ingestion (validation, hashing, deduplication, ordering), processing jobs, cache architecture, resume/retry |
+| **V2.3B** | Hierarchical memory: `CollectionMemory`, `SceneSummary`, scene grouping, cross-scene `EntityMemory`, `StateTransition` detection, `NarrativeMemory`, `HierarchicalRetriever`, `CollectionContextBuilder`, FAISS provenance records |
+| **V2.3C** | Production integration: `run_collection()` as the real collection path, `CollectionMemoryBuilder` / `HierarchicalRetriever` / `CollectionContextBuilder` wired in, `CreativePlanner` consuming collection memory, end-to-end runtime proof, legacy V2.2 path preserved |
+
+> Future (V3) components — causal reasoning, narrative possibility space, narrative
+> optimizer, candidate generation — are **not implemented**. See
+> [docs/V3_ROADMAP.md](docs/V3_ROADMAP.md), which is a proposal only.
 
 ## Pipeline Modes
 
@@ -178,12 +201,18 @@ pytest tests/regression -q
 ```
 
 Current suite: **233 tests collected** — 53 V2.2, 100 V2.3B hierarchical-memory,
-17 V2.3C integration, 63 V2.3C end-to-end runtime proof.
+17 V2.3C integration, 63 V2.3C end-to-end runtime proof. Full breakdown in
+[docs/V2.3_ARCHITECTURE.md §10](docs/V2.3_ARCHITECTURE.md#10-test-contract).
 
 The runtime-proof suite exercises the real `run_collection()` orchestration and
 asserts that each V2.3B component is actually invoked and that real objects flow
 between stages. It stubs only the expensive ML boundaries (vision, embeddings,
 Qwen, CLIP/NLI), never the components themselves.
+
+```bash
+# 202 model-independent tests, no weights or network required (~6 s)
+HF_HUB_OFFLINE=1 pytest tests/unit tests/integration/test_v23c_runtime_proof.py -q
+```
 
 > Note: `tests/integration/test_v23c_integration.py` constructs real
 > sentence-transformer embeddings, so it performs a Hugging Face model load on
