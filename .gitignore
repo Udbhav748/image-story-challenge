@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 *.log
 .pytest_cache/
+# local scratch scripts, not part of the submission
+analyze_results.py
+verify_numbers.py
